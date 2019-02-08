@@ -1,0 +1,9 @@
+node_modules/
+.DS_Store
+.env
+.nvmrc
+package-lock.json
+.nyc_output
+*.log
+tmp
+coverage
