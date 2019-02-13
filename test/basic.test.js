@@ -239,8 +239,7 @@ describe('Models', () => {
           return { str: 'string' };
         }
       }
-      const x = new TestModel();
-      x.str = 'Bob';
+      const x = new TestModel({ str: 'Bob' });
       const xJson = x.toJSON();
 
       assert.typeOf(xJson.str, 'string');
@@ -253,8 +252,7 @@ describe('Models', () => {
           return { str: 'Mixed' };
         }
       }
-      const x = new TestModel();
-      x.str = 'Bob';
+      const x = new TestModel({ str: 'Bob' });
       const xJson = x.toJSON();
 
       assert.typeOf(xJson.str, 'string');
@@ -269,8 +267,7 @@ describe('Models', () => {
           return { num: 'integer' };
         }
       }
-      const x = new TestModel();
-      x.num = 44.4;
+      const x = new TestModel({ num: 44.4 });
       const xJson = x.toJSON();
 
       assert.typeOf(xJson.num, 'number');
@@ -299,8 +296,7 @@ describe('Models', () => {
           return { int: 'integer' };
         }
       }
-      const x = new TestModel();
-      x.int = 44;
+      const x = new TestModel({ int: 44 });
       const xJson = x.toJSON();
 
       assert.typeOf(xJson.int, 'number');
@@ -313,8 +309,7 @@ describe('Models', () => {
           return { int: 'Mixed' };
         }
       }
-      const x = new TestModel();
-      x.int = 44;
+      const x = new TestModel({ int: 44 });
       const xJson = x.toJSON();
 
       assert.typeOf(xJson.int, 'number');
@@ -329,8 +324,7 @@ describe('Models', () => {
           return { bool: 'boolean' };
         }
       }
-      const x = new TestModel();
-      x.bool = true;
+      const x = new TestModel({ bool: true });
       const xJson = x.toJSON();
 
       assert.typeOf(xJson.bool, 'boolean');
@@ -343,8 +337,7 @@ describe('Models', () => {
           return { bool: 'Mixed' };
         }
       }
-      const x = new TestModel();
-      x.bool = true;
+      const x = new TestModel({ bool: true });
       const xJson = x.toJSON();
 
       assert.typeOf(xJson.bool, 'boolean');
@@ -359,8 +352,7 @@ describe('Models', () => {
           return { when: 'Date' };
         }
       }
-      const x = new TestModel();
-      x.when = new Date();
+      const x = new TestModel({ when: new Date() });
       const xJson = x.toJSON();
 
       assert.typeOf(xJson.when, 'string');
@@ -975,81 +967,87 @@ describe('Models', () => {
         testModel.name = 'Frank';
       });
     });
+
+    it('should validate a model to all depths', () => {
+      let called = false;
+      class TestModel extends Model {
+        static schema() {
+          return {
+            person: {
+              name: {
+                type: 'string',
+                validator: value => {
+                  if (typeof value !== 'string') {
+                    throw new Error('bad data');
+                  } else {
+                    called = true;
+                  }
+                },
+              },
+            },
+          };
+        }
+      }
+
+      // eslint-disable-next-line no-new
+      const testModel = new TestModel({ person: { name: 'Joseph' } });
+      assert.equal(called, true);
+
+      assert.throws(() => {
+        testModel.person.name = 'Frank';
+      });
+    });
+
+    // null subdocs without a validator should pass through unharmed
+    it('should validate a model to all depths unless null subdocs have no validator', () => {
+      class TestModel extends Model {
+        static schema() {
+          return {
+            person: {
+              notes: { type: 'string' },
+              info: {
+                name: {
+                  type: 'string',
+                },
+              },
+            },
+          };
+        }
+      }
+
+      // leaving off the person.info.name bit should be ok in this case
+      const testModel = new TestModel({ person: { notes: 'goes by joe' } });
+      assert(testModel);
+    });
+
+    // A model instance may have a null subdoc that needs to be validated
+    it('should validate a model to all depths and handle null subdocs', () => {
+      let called = false;
+      class TestModel extends Model {
+        static schema() {
+          return {
+            person: {
+              notes: { type: 'string' },
+              info: {
+                name: {
+                  type: 'string',
+                  validator: value => {
+                    if (typeof value !== 'string') {
+                      called = true;
+                      throw new Error('bad data');
+                    }
+                  },
+                },
+              },
+            },
+          };
+        }
+      }
+
+      // leaving off the name field is not ok here because info is null
+      const testModel = new TestModel({ person: { notes: 'goes by joe' } });
+      assert.equal(called, true);
+      assert(testModel);
+    });
   });
-
-  //   it('should validate a model to all depths', done => {
-  //     const modelId = H.uniqueId('model');
-  //     const called = false;
-  //     const TestMdl = frontier.model(modelId, {
-  //       person: {
-  //         name: {
-  //           type: 'string',
-  //           validator: value => {
-  //             if (typeof value !== 'string') {
-  //               throw new Error('bad data');
-  //             } else {
-  //               called = true;
-  //             }
-  //           },
-  //         },
-  //       },
-  //     });
-
-  //     const x = new TestMdl({ person: { name: 'Joseph' } });
-  //     frontier.validate(x, err => {
-  //       assert.isNull(err);
-  //       assert.equal(called, true);
-  //       done();
-  //     });
-  //   });
-
-  //   // null subdocs without a validator should pass through unharmed
-  //   it('should validate a model to all depths unless null subdocs have no validator', done => {
-  //     const modelId = H.uniqueId('model');
-  //     const TestMdl = frontier.model(modelId, {
-  //       person: {
-  //         notes: { type: 'string' },
-  //         info: {
-  //           name: {
-  //             type: 'string',
-  //           },
-  //         },
-  //       },
-  //     });
-  //     // leaving off the person.info.name bit should be ok in this case
-  //     const x = new TestMdl({ person: { notes: 'goes by joe' } });
-  //     frontier.validate(x, err => {
-  //       assert.isNull(err);
-  //       done();
-  //     });
-  //   });
-
-  //   // A model instance may have a null subdoc that needs to be validated
-  //   it('should validate a model to all depths and handle null subdocs', done => {
-  //     const modelId = H.uniqueId('model');
-  //     const called = false;
-  //     const TestMdl = frontier.model(modelId, {
-  //       person: {
-  //         notes: { type: 'string' },
-  //         info: {
-  //           name: {
-  //             type: 'string',
-  //             validator: value => {
-  //               if (typeof value !== 'string') {
-  //                 called = true;
-  //                 throw new Error('bad data');
-  //               }
-  //             },
-  //           },
-  //         },
-  //       },
-  //     });
-  //     // leaving off the name field is not ok here because info is null
-  //     const x = new TestMdl({ person: { notes: 'goes by joe' } });
-  //     frontier.validate(x, err => {
-  //       assert.isNotNull(err);
-  //       assert.equal(called, true);
-  //       done();
-  //     });
-  //   });
 });

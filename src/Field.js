@@ -1,34 +1,9 @@
 // A Field takes a field definition object
 class Field {
-  static getType(name, field) {
-    if (field.constructor === Object) {
-      if (!field.type || field.type.type !== undefined)
-        return new Field({ type: 'object', fields: field });
-      const modelType = Field.getModelType(name, field);
-      if (modelType) return modelType;
-      return new Field({ name, ...field });
-    }
-    if (Array.isArray(field)) {
-      const arrayType = Field.getType(name, field[0]).type;
-      if (field.length > 1)
-        throw new TypeError(
-          `Array Field '${name}' has more than one type definition`
-        );
-      if (!Field.isValidType(arrayType))
-        throw new TypeError(
-          `Array Field '${name}' has an invalid type '${arrayType}'`
-        );
-      return new Field({ name, type: 'array' });
-    }
-    return new Field({ name, type: field });
-  }
-
-  static getModelType(name, field) {
-    if (typeof field.type === 'function') {
-      if (Field.isModelType(field.type)) {
-        return new Field({ name, ...field }); // TODO: finish this
-      }
-      return Field.getModelType(name, { ...field, type: field.type() });
+  static getModelType(definition) {
+    if (typeof definition.type === 'function') {
+      if (Field.isModelType(definition.type)) return definition.type;
+      return Field.getModelType({ type: definition.type() });
     }
     return null;
   }
@@ -44,66 +19,126 @@ class Field {
     return [...coreTypes, 'array', 'object', 'Mixed', 'Date'].includes(type);
   }
 
-  constructor(definition) {
-    // console.log('Field Constructor:', { args });
-    if (!Field.isValidType(definition.type))
+  constructor({ name, definition, value }) {
+    Object.assign(this, {
+      name,
+      value: null,
+      type: null,
+      readonly: false,
+      required: false,
+      default: undefined,
+      validator: null,
+      definition,
+    });
+    Object.assign(this, this.getFieldSchema(definition));
+    this.value = this.getValue(value);
+    if (!this.type || !Field.isValidType(this.type))
       throw new TypeError(
-        `invalid field type '${definition.type}' for field '${definition.name}'`
+        `invalid field type '${this.type}' for field '${name}'`
       );
 
-    Object.assign(
-      this,
-      {
-        name: '',
-        type: null,
-        readonly: false,
-        required: false,
-        default: undefined,
-        validator: null,
+    return new Proxy(this, {
+      get(target, key) {
+        return Reflect.get(target, key);
       },
-      definition
-    );
+      set(target, key, v) {
+        if (key === 'value') {
+          target.validate(v);
+          return Reflect.set(target, key, target.getValue(v));
+        }
+        return Reflect.set(target, key, v);
+      },
+    });
   }
 
   validate(data) {
+    if (this.type === 'object') {
+      // TODO: replace this with child fields
+      Object.entries(this.definition).forEach(([key, definition]) => {
+        if (definition.validator) definition.validator(data[key]);
+      });
+    }
     if (this.validator) this.validator(data);
   }
 
-  getValue(data) {
-    this.validate(data);
-    if (data) {
-      // Get Value of Nested and Reference models
-      if (Field.isModelType(this.type)) return data; // TODO: may want to do model checking here
-      switch (this.type) {
-        case 'string':
-          return String(data);
-        case 'number':
-          return Number(data);
-        case 'integer':
-          return Number(data);
-        case 'boolean':
-          return Boolean(data);
-        case 'array': {
-          if (data.constructor !== Array)
-            throw new TypeError(`invalid value for array type '${data}'`);
-          return data;
-        }
-        case 'object':
-          console.log('Field::getValue', { object: data });
-          return data;
-        case 'Mixed':
-          console.log('Field::getValue', { Mixed: data });
-          return data;
-        default:
-          throw new TypeError(
-            `Field::getValue can't handle type '${this.type}'`
-          );
-      }
+  getFieldSchema(definition) {
+    const type = this.getFieldType(definition);
+    if (definition.constructor === Object) return { ...definition, type };
+    return { type };
+  }
+
+  getFieldType(definition) {
+    const { name } = this;
+    if (definition.constructor === Object) {
+      if (!definition.type || definition.type.type !== undefined)
+        return 'object'; // TODO: needs more work { type: 'object', fields: definition };
+      const modelType = Field.getModelType(definition);
+      if (modelType) return modelType;
+      return definition.type;
     }
-    return this.defaultValue();
+    if (Array.isArray(definition)) {
+      const arrayType = this.getFieldType(definition[0]);
+      if (definition.length > 1)
+        throw new TypeError(
+          `Array Field '${name}' has more than one type definition`
+        );
+      if (!Field.isValidType(arrayType))
+        throw new TypeError(
+          `Array Field '${name}' has an invalid type '${arrayType}'`
+        );
+      return 'array';
+    }
+    return definition;
+  }
+
+  getValue(data = this.value) {
+    // console.log(`Field(${this.name})::getValue()`);
+    if (!data) return this.defaultValue();
+    this.validate(data);
+
+    // Get Value of Nested and Reference models
+    if (Field.isModelType(this.type)) return data; // TODO: may want to do model checking here
+
+    switch (this.type) {
+      case 'string':
+        return String(data);
+      case 'number':
+        return Number(data);
+      case 'integer':
+        return Number(data);
+      case 'boolean':
+        return Boolean(data);
+      case 'array': {
+        if (data.constructor !== Array)
+          throw new TypeError(`invalid value for array type '${data}'`);
+        return data;
+      }
+      case 'object':
+        // TODO: this probably requires more work
+        // console.log('Field:', { name: this.name, type: this.type, data });
+        return new Proxy(data, {
+          set: (target, key, value) => {
+            // console.log({ target, key, value });
+            // if (data[key].validator) data[key].validator(value);
+            target[key] = value;
+          },
+        });
+      // return data;
+      case 'Mixed':
+        // TODO: this probably requires more work
+        // console.log('Field:', { name: this.name, type: this.type, data });
+        return data;
+      case 'Date':
+        return new Date(data);
+      default:
+        throw new TypeError(
+          `Field(${this.name})::getValue() can't handle type '${this.type}'`
+        );
+    }
   }
 
   defaultValue() {
+    const { type, required } = this;
     // Get default value for feild
     if (this.default !== undefined)
       return typeof this.default === 'function' ? this.default() : this.default;
@@ -113,22 +148,19 @@ class Field {
     //   const NestedModel = this.type;
     //   return new NestedModel();
     // }
-    switch (this.type) {
-      // case 'string':
-      //   return '';
-      // case 'number':
-      //   return 0;
-      // case 'integer':
-      //   return 0;
-      // case 'boolean':
-      //   return false;
-      case 'array':
-        return [];
-      case 'object':
-        return {};
-      default:
-        return undefined;
-    }
+
+    const defaults = {
+      string: '',
+      number: 0,
+      integer: 0,
+      boolean: 0,
+      array: [],
+      object: {},
+    };
+
+    if (['array', 'object'].includes(type)) return defaults[type];
+    if (required) return defaults[type];
+    return undefined;
   }
 }
 

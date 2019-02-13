@@ -9,34 +9,18 @@ class Model {
   }
 
   static async getById(id, options = {}) {
-    // console.log('Model::getById()');
     const { repository } = options;
     if (!repository)
       throw new Error(
         `${this.modelName}::getById() called without a repository`
       );
 
-    // await this.models[Model.name].getById(id);
     const model = this.ref(id, options);
     return model.load();
-    // return this.datastore.load(model);
-
-    // return repository.getById(this, id);
   }
 
-  static validate() {
-    // console.log('Frontier.Model::validate()');
-    Object.entries(this.schema()).forEach(([name, field]) => {
-      // catch array definitions
-      const type = Field.getType(name, field);
-      return new Field({ name, ...type });
-    });
-  }
-
-  constructor(data, options) {
+  constructor(data = {}, options) {
     const { repository, loaded } = Object.assign({}, options);
-
-    this.constructor.validate();
     this.modelName = this.constructor.name.replace(/Repository$/, '');
     this.schema = this.constructor.schema();
     this.loaded = loaded === undefined ? true : loaded;
@@ -50,32 +34,42 @@ class Model {
         `Model '${this.modelName}' is missing a default function for Field 'id'`
       );
 
-    Object.assign(this, this.getFieldValues(data));
-  }
-
-  getFieldValues(data = {}) {
-    return Object.entries(this.schema).reduce(
-      (result, [name, schemaField]) => ({
+    this.fields = Object.entries(this.schema).reduce(
+      (result, [name, definition]) => ({
         ...result,
-        [name]: Field.getType(name, schemaField).getValue(data[name]),
+        [name]: new Field({ name, definition, value: data[name] }),
       }),
       {}
     );
+
+    const schemaKeys = Object.keys(this.schema);
+    return new Proxy(this, {
+      get(target, key) {
+        if (schemaKeys.includes(key))
+          return Reflect.get(target.fields[key], 'value');
+        return Reflect.get(target, key);
+      },
+      set(target, key, value) {
+        if (schemaKeys.includes(key))
+          return Reflect.set(target.fields[key], 'value', value);
+        return Reflect.set(target, key, value);
+      },
+    });
   }
 
   toJSON(model = this) {
-    return Object.entries(model.schema).reduce(
+    return Object.entries(model.fields).reduce(
       (result, [name, field]) => {
         if (name === 'meta') return result;
         const value = this[name];
         if (typeof value === 'object') {
           if (value.constructor === Date)
             return { ...result, [name]: value.toJSON() };
-          if (Field.getType(name, field).type === 'Mixed') {
+          if (field.type === 'Mixed') {
             throw new Error(`Model::toJSON for Mixed is not implemented`);
             // TODO: Handle Mixed fields toJSON
           }
-          if (Field.getType(name, field).type === 'object') {
+          if (field.type === 'object') {
             return { ...result, [name]: value };
           }
           // if (value.constructor === Object) {
