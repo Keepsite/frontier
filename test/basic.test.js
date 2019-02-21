@@ -643,9 +643,7 @@ describe('Models', () => {
         static schema() {
           return {
             name: 'string',
-            test: {
-              child: 'string',
-            },
+            test: { child: 'string' },
           };
         }
       }
@@ -667,9 +665,7 @@ describe('Models', () => {
         static schema() {
           return {
             name: 'string',
-            test: {
-              child: 'string',
-            },
+            test: { child: 'string' },
           };
         }
       }
@@ -898,6 +894,29 @@ describe('Models', () => {
       assert.throws(() => new TestModel({ name: 'Frank' }));
     });
 
+    it('should validate a model assignment with validator', async () => {
+      let called = false;
+      class TestModel extends Model {
+        static schema() {
+          return {
+            name: {
+              type: 'string',
+              validator: value => {
+                called = true;
+                if (value === 'Frank') throw new Error('Bad Data');
+              },
+            },
+          };
+        }
+      }
+
+      const testModel = new TestModel();
+      testModel.name = 'Joseph';
+      assert.equal(called, true);
+
+      assert.throws(() => new TestModel({ name: 'Frank' }));
+    });
+
     it('should raise an error when validator criteria not met', async () => {
       let called = false;
       class TestModel extends Model {
@@ -993,8 +1012,11 @@ describe('Models', () => {
       const testModel = new TestModel({ person: { name: 'Joseph' } });
       assert.equal(called, true);
 
+      testModel.person.name = 'Frank';
+      assert.equal(testModel.person.name, 'Frank');
+
       assert.throws(() => {
-        testModel.person.name = 'Frank';
+        testModel.person.name = 0;
       });
     });
 
@@ -1045,9 +1067,8 @@ describe('Models', () => {
       }
 
       // leaving off the name field is not ok here because info is null
-      const testModel = new TestModel({ person: { notes: 'goes by joe' } });
+      assert.throws(() => new TestModel({ person: { notes: 'goes by joe' } }));
       assert.equal(called, true);
-      assert(testModel);
     });
   });
 });

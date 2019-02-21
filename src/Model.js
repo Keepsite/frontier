@@ -69,9 +69,9 @@ class Model {
             throw new Error(`Model::toJSON for Mixed is not implemented`);
             // TODO: Handle Mixed fields toJSON
           }
-          if (field.type === 'object') {
-            return { ...result, [name]: value };
-          }
+          // if (field.type === 'object') {
+          //   return { ...result, [name]: value };
+          // }
           // if (value.constructor === Object) {
           //   // TODO: test and fix this
           //   return { ...result, [name]: value };
