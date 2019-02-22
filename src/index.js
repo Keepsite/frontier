@@ -2,16 +2,15 @@ const _ = require('lodash');
 
 // Stores Model definitions, datastores and repositories
 class Frontier {
-  constructor(args) {
-    Object.assign(
-      this,
-      {
-        models: [],
-        plugins: [],
-        datastores: {},
-      },
-      args
-    );
+  constructor({ models, plugins, datastores }) {
+    Object.assign(this, {
+      models: models.map(M => {
+        M.prototype.frontier = this;
+        return M;
+      }),
+      plugins,
+      datastores,
+    });
     this.validate();
   }
 

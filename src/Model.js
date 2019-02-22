@@ -34,10 +34,15 @@ class Model {
         `Model '${this.modelName}' is missing a default function for Field 'id'`
       );
 
+    Field.prototype.frontier = this.frontier;
     this.fields = Object.entries(this.schema).reduce(
       (result, [name, definition]) => ({
         ...result,
-        [name]: new Field({ name, definition, value: data[name] }),
+        [name]: new Field({
+          name,
+          definition,
+          value: data[name],
+        }),
       }),
       {}
     );
@@ -66,8 +71,9 @@ class Model {
           if (value.constructor === Date)
             return { ...result, [name]: value.toJSON() };
           if (field.type === 'Mixed') {
-            throw new Error(`Model::toJSON for Mixed is not implemented`);
             // TODO: Handle Mixed fields toJSON
+            // throw new Error(`Model::toJSON for Mixed is not implemented`);
+            return { ...result, [name]: value.toJSON() };
           }
           // if (field.type === 'object') {
           //   return { ...result, [name]: value };

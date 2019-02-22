@@ -5,12 +5,9 @@ const InMemoryAdapter = require('../src/adapters/InMemoryAdapter');
 const Datastore = require('../src/Datastore');
 const Repository = require('../src/Repository');
 
-// const H = require('./harness');
-// const frontier = H.lib;
-
 describe('Models', () => {
-  //   // Add long timeout in case of slow response on CI build servers.
-  //   this.timeout(10000);
+  // Add long timeout in case of slow response on CI build servers.
+  // this.timeout(10000);
 
   it('should fail to register two models with the same name', () => {
     class TestModel extends Model {
@@ -373,7 +370,54 @@ describe('Models', () => {
     });
   });
 
-  describe('Groups', () => {
+  describe('Mixed', () => {
+    it('should allow mixed references', () => {
+      class MixedRefModel extends Model {
+        static schema() {
+          return {
+            anyRef: { type: 'Mixed' },
+          };
+        }
+      }
+
+      const frontier = new Frontier({ models: [MixedRefModel] });
+
+      [...Array(10)].forEach((_, i) => {
+        class M extends Model {
+          static schema() {
+            return {
+              name: 'string',
+            };
+          }
+        }
+
+        Object.defineProperty(M, 'name', { value: `M${i}` });
+        frontier.addModel(M);
+
+        const instance = new M({ name: 'Frank' });
+        const mixer = new MixedRefModel({ anyRef: instance });
+        assert.equal(mixer.anyRef.name, 'Frank');
+
+        const frozen = mixer.toJSON();
+        assert.typeOf(frozen.anyRef, 'object');
+        assert.equal(frozen.anyRef.name, 'Frank');
+        assert.equal(frozen.anyRef.meta.type, M.name);
+
+        // Demonstrate that when we bring it back from coo, the reference is
+        // intact, and doesn't throw an error related to unknown types.
+        const thawed = frontier.fromJSON(frozen, MixedRefModel.name);
+        assert.isOk(thawed.anyRef);
+        assert.instanceOf(thawed.anyRef, M);
+
+        // TODO: think about this for non refs (used in this test)
+        // Naturally it will be an unloaded reference, but this proves that
+        // the ref has a 'loaded' function, meaning it's actually a reference.
+        assert.isFalse(thawed.anyRef.loaded);
+      });
+    });
+  });
+
+  describe('Object Fields', () => {
     it('should serialize groups properly', () => {
       class TestModel extends Model {
         static schema() {

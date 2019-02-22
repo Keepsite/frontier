@@ -144,9 +144,20 @@ class Field {
           },
         });
       }
-      case 'Mixed':
+      case 'Mixed': {
+        const modelName = _.get(data, 'meta.type');
+        if (modelName) {
+          if (!this.frontier)
+            throw new Error('frontier instance required for mixed model types');
+          const ModelType = this.frontier.models.find(
+            m => m.name === modelName
+          );
+          if (!ModelType) throw new Error(`Model '${modelName}' not found`);
+          return new ModelType(data);
+        }
         // TODO: this probably requires more work
         return data;
+      }
       case 'Date':
         return new Date(data);
       default:
