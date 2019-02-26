@@ -1,5 +1,11 @@
 const _ = require('lodash');
 
+class ModelRef {
+  constructor(type) {
+    Object.assign(this, { type });
+  }
+}
+
 // A Field takes a field definition object
 class Field {
   static getModelType(definition) {
@@ -14,14 +20,17 @@ class Field {
     return Object.getPrototypeOf(type).name === 'Model';
   }
 
-  static isObjectFieldType(type) {
-    return type.name === 'ObjectField';
+  static isModelRef(modelRef) {
+    if (modelRef.constructor === ModelRef) {
+      return modelRef.type === 'Mixed' || Field.isModelType(modelRef.type);
+    }
+    return false;
   }
 
   static isValidType(type) {
     const coreTypes = ['string', 'number', 'integer', 'boolean'];
     if (Field.isModelType(type)) return true;
-    if (Field.isObjectFieldType(type)) return true;
+    if (Field.isModelRef(type)) return true;
     return [...coreTypes, 'array', 'object', 'Mixed', 'Date'].includes(type);
   }
 
@@ -75,6 +84,7 @@ class Field {
   getFieldType(definition) {
     const { name } = this;
     if (definition.constructor === Object) {
+      if (definition.ref) return new ModelRef(definition.ref);
       if (!definition.type || definition.type.type !== undefined)
         return 'object';
       const modelType = Field.getModelType(definition);
@@ -101,7 +111,14 @@ class Field {
     if (!data && data !== false) return this.defaultValue();
 
     // Get Value of Nested and Reference models
-    // TODO: may want to do model checking here
+    if (Field.isModelRef(this.type)) {
+      if (typeof data !== 'object')
+        throw new Error(
+          `ModelRef field '${this.name}' must not have primitive value`
+        );
+      if (_.has(data, 'meta.type')) return this.getModelInstance(data);
+      return data;
+    }
     if (Field.isModelType(this.type)) return data;
 
     const coreTypes = {
@@ -113,58 +130,65 @@ class Field {
 
     if (coreTypes[this.type]) return coreTypes[this.type](data);
 
-    switch (this.type) {
-      case 'array': {
-        if (data.constructor !== Array)
-          throw new TypeError(`invalid value for array type '${data}'`);
-        return data;
-      }
-      case 'object': {
-        const object = Object.entries(this.definition).reduce(
-          (result, [name, definition]) => ({
-            ...result,
-            [name]: new Field({
-              name,
-              definition,
-              value: data ? data[name] : this.defaultValue(definition),
-            }),
-          }),
-          {}
-        );
-        return new Proxy(object, {
-          get(target, key) {
-            // TODO: check for object keys
-            if (target[key]) return Reflect.get(target[key], 'value');
-            return Reflect.get(target, key);
-          },
-          set(target, key, value) {
-            // TODO: check for object keys
-            if (target[key]) Reflect.set(target[key], 'value', value);
-            return Reflect.get(target, key);
-          },
-        });
-      }
-      case 'Mixed': {
-        const modelName = _.get(data, 'meta.type');
-        if (modelName) {
-          if (!this.frontier)
-            throw new Error('frontier instance required for mixed model types');
-          const ModelType = this.frontier.models.find(
-            m => m.name === modelName
-          );
-          if (!ModelType) throw new Error(`Model '${modelName}' not found`);
-          return new ModelType(data);
-        }
-        // TODO: this probably requires more work
-        return data;
-      }
-      case 'Date':
-        return new Date(data);
-      default:
-        throw new TypeError(
-          `Field(${this.name})::getValue() can't handle type '${this.type}'`
-        );
+    if (this.type === 'array') {
+      if (data.constructor !== Array)
+        throw new TypeError(`invalid value for array type '${data}'`);
+
+      const arrayType = this.getFieldType(this.definition[0]);
+      if (arrayType.constructor === ModelRef)
+        return data.map(value => this.getModelInstance(value));
+      return data;
     }
+
+    if (this.type === 'object') {
+      const object = Object.entries(this.definition).reduce(
+        (result, [name, definition]) => ({
+          ...result,
+          [name]: new Field({
+            name,
+            definition,
+            value: data ? data[name] : this.defaultValue(definition),
+          }),
+        }),
+        {}
+      );
+      return new Proxy(object, {
+        get(target, key) {
+          // TODO: check for object keys
+          if (target[key]) return Reflect.get(target[key], 'value');
+          return Reflect.get(target, key);
+        },
+        set(target, key, value) {
+          // TODO: check for object keys
+          if (target[key]) Reflect.set(target[key], 'value', value);
+          return Reflect.get(target, key);
+        },
+      });
+    }
+    if (this.type === 'Mixed') {
+      if (_.has(data, 'meta.type')) return this.getModelInstance(data);
+      // TODO: this probably requires more work
+      return data;
+    }
+    if (this.type === 'Date') return new Date(data);
+    throw new TypeError(
+      `Field(${this.name})::getValue() can't handle type '${this.type}'`
+    );
+  }
+
+  getModelInstance(data) {
+    const modelName = data.modelName || _.get(data, 'meta.type');
+    if (!modelName)
+      throw new Error(
+        `Field::getModelInstance() data is not a model '${data}'`
+      );
+    if (!this.repository)
+      throw new Error(
+        'Frontier::Repository instance required to load child models'
+      );
+    const ModelType = this.repository.models[modelName];
+    if (!ModelType) throw new Error(`Model '${modelName}' not found`);
+    return new ModelType(data);
   }
 
   defaultValue(field = this) {
@@ -190,4 +214,5 @@ class Field {
   }
 }
 
+Field.ModelRef = ModelRef;
 module.exports = Field;

@@ -13,6 +13,20 @@ class InMemoryAdapter extends Adapter {
     return `${modelName}${keySeperator}${id}`;
   }
 
+  find(modelName, query, options) {
+    const typeValues = Object.values(this.db).filter(
+      v => v.meta.type === modelName
+    );
+    const values = typeValues.filter(v =>
+      Object.entries(query).reduce(
+        (result, [key, value]) => result && v[key] === value,
+        true
+      )
+    );
+
+    return { values };
+  }
+
   load(model) {
     const key = this.getModelKey(model);
     const value = this.db[key];

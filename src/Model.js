@@ -5,19 +5,38 @@ const Field = require('./Field');
 
 // A Model takes a definition object
 class Model {
+  static validate() {
+    const instance = new this();
+    return !!instance;
+  }
+
   static ref(id, options) {
     return new this({ id }, { ...options });
   }
 
   static async getById(id, options = {}) {
-    const { repository } = options;
+    const repository = options.repository || this.prototype.repository;
     if (!repository)
-      throw new Error(
-        `${this.modelName}::getById() called without a repository`
-      );
+      throw new Error(`${this.name}::getById() called without a repository`);
 
     const model = this.ref(id, options);
     return model.load();
+  }
+
+  static async find(query, options = {}) {
+    const repository = options.repository || this.prototype.repository;
+    if (!repository)
+      throw new Error(`${this.name}::find() called without a repository`);
+
+    return repository.find(this, query, options);
+  }
+
+  static async findOne(query, options = {}) {
+    const repository = options.repository || this.prototype.repository;
+    if (!repository)
+      throw new Error(`${this.name}::findOne() called without a repository`);
+
+    return repository.findOne(this, query, options);
   }
 
   constructor(data = {}, options) {
@@ -34,7 +53,7 @@ class Model {
         `Model '${this.modelName}' is missing a default function for Field 'id'`
       );
 
-    Field.prototype.frontier = this.frontier;
+    Field.prototype.repository = this.repository;
     this.fields = Object.entries(this.schema).reduce(
       (result, [name, definition]) => ({
         ...result,
@@ -67,21 +86,23 @@ class Model {
       (result, [name, field]) => {
         if (name === 'meta') return result;
         const value = this[name];
-        if (typeof value === 'object') {
-          if (value.constructor === Date)
-            return { ...result, [name]: value.toJSON() };
-          if (field.type === 'Mixed') {
-            // TODO: Handle Mixed fields toJSON
-            // throw new Error(`Model::toJSON for Mixed is not implemented`);
-            return { ...result, [name]: value.toJSON() };
+        if (value) {
+          if (value.constructor === Array) {
+            return {
+              ...result,
+              [name]: value.map(v => v.toJSON()),
+            };
           }
-          // if (field.type === 'object') {
-          //   return { ...result, [name]: value };
-          // }
-          // if (value.constructor === Object) {
-          //   // TODO: test and fix this
-          //   return { ...result, [name]: value };
-          // }
+          if (typeof value === 'object') {
+            if (value.constructor === Date)
+              return { ...result, [name]: value.toJSON() };
+            if (
+              field.type === 'Mixed' ||
+              field.type.constructor === Field.ModelRef
+            ) {
+              return { ...result, [name]: value.toJSON() };
+            }
+          }
         }
         return { ...result, [name]: value };
       },

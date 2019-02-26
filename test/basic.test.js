@@ -60,7 +60,7 @@ describe('Models', () => {
     }
 
     const frontier = new Frontier({ models: [TestModel] });
-    assert.instanceOf(frontier, Frontier);
+    assert.instanceOf(frontier, Repository);
   });
 
   it('should understand all basic types in both schema formats, flat and object', () => {

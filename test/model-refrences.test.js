@@ -1,10 +1,11 @@
-const { expect } = require('chai');
+const { assert } = require('chai');
 const Frontier = require('../src');
 const Model = require('../src/Model');
+const InMemoryAdapter = require('../src/adapters/InMemoryAdapter');
+const Datastore = require('../src/Datastore');
+const Repository = require('../src/Repository');
 
 describe('Model references', () => {
-  // this.timeout(2000000);
-
   class Account extends Model {
     static schema() {
       return {
@@ -52,6 +53,20 @@ describe('Model references', () => {
     // }
   }
 
+  class MixedRefModel extends Model {
+    static schema() {
+      return {
+        anyRef: { ref: 'Mixed' },
+      };
+    }
+  }
+
+  const datastore = new Datastore({ Adapter: InMemoryAdapter });
+  const repository = new Repository({
+    models: [Account, User, MultiAccountUser, MixedRefModel],
+    datastore,
+  });
+
   // before(function(done) {
   //   ottoman.ensureIndices(function(err) {
   //     if (err) {
@@ -64,17 +79,9 @@ describe('Model references', () => {
   // });
 
   it('should allow mixed references', () => {
-    class MixedRefModel extends Model {
-      static schema() {
-        return {
-          anyRef: { ref: 'Mixed' },
-        };
-      }
-    }
-
     const frontier = new Frontier({ models: [MixedRefModel] });
 
-    [...Array(10)].forEach(() => {
+    [...Array(10)].forEach((_, i) => {
       class M extends Model {
         static schema() {
           return {
@@ -83,207 +90,117 @@ describe('Model references', () => {
         }
       }
 
+      Object.defineProperty(M, 'name', {
+        value: `${M.name}${i}`,
+      });
+
+      frontier.addModel(M);
+
       const instance = new M({ name: 'Frank' });
       const mixer = new MixedRefModel({ anyRef: instance });
       const frozen = mixer.toJSON();
 
-      expect(frozen.anyRef).to.be.an('object');
-      expect(frozen.anyRef.name).to.equal('Frank');
-      // expect(frozen.anyRef[ottoman.ottomanType]).to.contain('throwaway');
+      assert.typeOf(frozen.anyRef, 'object');
+      assert.equal(frozen.anyRef.name, 'Frank');
+      // assert(frozen.anyRef[ottoman.ottomanType]).to.contain('throwaway');
 
       // Demonstrate that when we bring it back from coo, the reference is
       // intact, and doesn't throw an error related to unknown types.
       const thawed = frontier.fromJSON(frozen, MixedRefModel.name);
-      expect(thawed.anyRef).to.be.ok;
-      console.log({ anyRef: frozen.anyRef, thawed: thawed.anyRef });
+      assert.isOk(thawed.anyRef);
 
       // Naturally it will be an unloaded reference, but this proves that
       // the ref has a 'loaded' function, meaning it's actually a reference.
-      expect(thawed.anyRef.loaded).to.be.false;
+      assert.isFalse(thawed.anyRef.loaded());
     });
   });
 
-  // it('disallow non-reference values in mixed references', function(done) {
-  //   class MixedRefModel extends Model {
-  //     H.uniqueId('throwaway'), {
-  //     anyRef: { ref: 'Mixed' },
-  //   });
+  it('disallow non-reference values in mixed references', () => {
+    // Horribly illegal, Frank is not a reference.
+    assert.throw(() => new MixedRefModel({ anyRef: 'Frank' }));
+  });
 
-  //   // Horribly illegal, Frank is not a reference.
-  //   const inst = new MixedRefModel({ anyRef: 'Frank' });
+  it("shouldn't require reference to be present", async () => {
+    const notLinked = new User({ username: 'foo' });
 
-  //   try {
-  //     inst.toCoo();
-  //     done(new Error('toCoo allows non-reference values in mixed refs'));
-  //   } catch (err) {
-  //     // toCoo blows up with: Error: Expected anyRef type to be a ModelInstance.
-  //     done();
-  //   }
-  // });
+    await notLinked.save({ repository });
+    assert.isOk(notLinked.username);
+  });
 
-  // it("shouldn't require reference to be present", function(done) {
-  //   const notLinked = new User({
-  //     username: 'foo',
-  //   });
+  it('should permit referencing two models together', async () => {
+    const account = new Account({
+      email: 'danlannz@fakemail.com',
+      name: 'Daniel Landers',
+    });
 
-  //   notLinked.save(function(err) {
-  //     if (err) {
-  //       return done(err);
-  //     }
+    const user = new User({
+      username: 'danlannz',
+      account,
+    });
 
-  //     expect(notLinked.username).to.be.ok;
-  //     done();
-  //   });
-  // });
+    await account.save({ repository });
+    await user.save({ repository });
 
-  // it('should permit referencing two models together', function(done) {
-  //   const myAccount = new Account({
-  //     email: 'burtteh@fakemail.com',
-  //     name: 'Brett Lawson',
-  //   });
+    const myUser = await User.findOne({ username: 'danlannz' }, { repository });
+    assert.isFalse(myUser.account.loaded());
 
-  //   const myUser = new User({
-  //     username: 'brett19',
-  //     account: myAccount,
-  //   });
+    await myUser.account.load({ repository });
+    assert.equal(myUser.account.email, 'danlannz@fakemail.com');
+  });
 
-  //   myAccount.save(function(err) {
-  //     if (err) {
-  //       return done(err);
-  //     }
+  it('should allow re-linking of models', async () => {
+    const notLinked = new User({ username: 'relink' });
+    await notLinked.save({ repository });
+    assert.isOk(notLinked.username);
 
-  //     myUser.save(function(err) {
-  //       if (err) {
-  //         return done(err);
-  //       }
+    const newLinkage = new Account({
+      email: 'foo@bar.com',
+      name: 'Foobar',
+    });
+    await newLinkage.save({ repository });
 
-  //       User.findByUsername('brett19', function(err, myUsers) {
-  //         // console.log('USERS: ' + JSON.stringify(myUsers));
-  //         expect(myUsers).to.be.an('array');
-  //         expect(myUsers.length).to.equal(1);
+    notLinked.account = newLinkage;
+    await notLinked.save({ repository });
 
-  //         const myUser = myUsers[0];
+    const relinked = await User.findOne({ username: 'relink' }, { repository });
+    assert.isFalse(relinked.account.loaded());
+    assert.isOk(relinked.account);
 
-  //         // console.log(JSON.stringify(myUser));
-  //         // console.log('Loaded? ' + myUser.account.loaded());
-  //         expect(myUser.account.loaded()).to.be.false;
+    await relinked.account.load();
+    assert.equal(relinked.account.email, 'foo@bar.com');
+  });
 
-  //         myUser.account.load(function(err2) {
-  //           if (err2) {
-  //             return done(err2);
-  //           }
-  //           expect(myUser.account.email).to.equal('burtteh@fakemail.com');
-  //           done();
-  //         });
-  //       });
-  //     });
-  //   });
-  // });
+  it('should allow one-to-many linkages', async () => {
+    const account1 = new Account({
+      email: 'account1@fake.com',
+      name: 'Account1',
+    });
 
-  // it('should allow re-linking of models', function(done) {
-  //   const notLinked = new User({
-  //     username: 'relink',
-  //   });
+    const account2 = new Account({
+      email: 'account2@fake.com',
+      name: 'Account2',
+    });
 
-  //   notLinked.save(function(err) {
-  //     if (err) {
-  //       return done(err);
-  //     }
+    const myUser = new MultiAccountUser(
+      {
+        username: 'multi-account',
+        accounts: [account1, account2],
+      },
+      { repository }
+    );
 
-  //     expect(notLinked.username).to.be.ok;
+    await Promise.all(
+      [account1, account2, myUser].map(model => model.save({ repository }))
+    );
+    const multiUser = await MultiAccountUser.findOne(
+      {
+        username: 'multi-account',
+      },
+      { repository }
+    );
 
-  //     const newLinkage = new Account({
-  //       email: 'foo@bar.com',
-  //       name: 'Foobar',
-  //     });
-
-  //     newLinkage.save(function(err) {
-  //       if (err) {
-  //         return done(err);
-  //       }
-
-  //       notLinked.account = newLinkage;
-
-  //       notLinked.save(function(err) {
-  //         if (err) {
-  //           return done(err);
-  //         }
-
-  //         User.findByUsername('relink', function(err, users) {
-  //           expect(users).to.be.an('array');
-  //           expect(users.length).to.equal(1);
-  //           const relinked = users[0];
-
-  //           expect(relinked.account.loaded()).to.be.false;
-  //           expect(relinked.account).to.be.ok;
-
-  //           relinked.account.load(function(err) {
-  //             if (err) {
-  //               return done(err);
-  //             }
-
-  //             expect(relinked.account.email).to.equal('foo@bar.com');
-  //             done();
-  //           });
-  //         });
-  //       });
-  //     });
-  //   });
-  // });
-
-  // it('should allow one-to-many linkages', function(done) {
-  //   const account1 = new Account({
-  //     email: 'account1@fake.com',
-  //     name: 'Account1',
-  //   });
-
-  //   const account2 = new Account({
-  //     email: 'account2@fake.com',
-  //     name: 'Account2',
-  //   });
-
-  //   const myUser = new MultiAccountUser({
-  //     username: 'multi-account',
-  //     accounts: [account1, account2],
-  //   });
-
-  //   const toSave = [account1, account2, myUser];
-  //   const saved = 0;
-
-  //   function proceed() {
-  //     MultiAccountUser.findByUsername('multi-account', function(err, users) {
-  //       if (err) {
-  //         return done(err);
-  //       }
-  //       expect(users).to.be.an('array');
-  //       expect(users.length).to.equal(1);
-
-  //       const multiUser = users[0];
-
-  //       expect(multiUser.accounts).to.be.an('array');
-  //       expect(multiUser.accounts.length).to.equal(2);
-
-  //       for (const i = 0; i < multiUser.accounts.length; i++) {
-  //         expect(multiUser.accounts[i].loaded()).to.be.false;
-  //       }
-
-  //       done();
-  //     });
-  //   }
-
-  //   function saveCallback(err) {
-  //     if (err) {
-  //       return done(err);
-  //     }
-
-  //     saved++;
-  //     if (saved === toSave.length) {
-  //       proceed();
-  //     }
-  //   }
-
-  //   toSave.forEach(function(model) {
-  //     model.save(saveCallback);
-  //   });
-  // });
+    assert.typeOf(multiUser.accounts, 'array');
+    assert.equal(multiUser.accounts.length, 2);
+    multiUser.accounts.forEach(a => assert.isFalse(a.loaded()));
+  });
 });
