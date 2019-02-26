@@ -1,3 +1,4 @@
+const uuid = require('uuid');
 const Adapter = require('../Adapter');
 
 class InMemoryAdapter extends Adapter {
@@ -14,21 +15,21 @@ class InMemoryAdapter extends Adapter {
 
   load(model) {
     const key = this.getModelKey(model);
-    const result = this.db[key];
-    if (!result) throw new Error(`record '${key}' missing`);
-    return result;
+    const value = this.db[key];
+    if (!value) throw new Error(`record '${key}' missing`);
+    return { cas: uuid.v4(), value };
   }
 
   save(model) {
     const key = this.getModelKey(model);
     this.db[key] = model.toJSON();
-    return model;
+    return { cas: uuid.v4() };
   }
 
   remove(model) {
     const key = this.getModelKey(model);
     delete this.db[key];
-    return model;
+    return { cas: uuid.v4() };
   }
 }
 

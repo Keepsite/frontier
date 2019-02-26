@@ -1,3 +1,4 @@
+const _ = require('lodash');
 const uuid = require('uuid');
 
 const Field = require('./Field');
@@ -5,7 +6,7 @@ const Field = require('./Field');
 // A Model takes a definition object
 class Model {
   static ref(id, options) {
-    return new this({ id }, { ...options, loaded: false });
+    return new this({ id }, { ...options });
   }
 
   static async getById(id, options = {}) {
@@ -20,10 +21,9 @@ class Model {
   }
 
   constructor(data = {}, options) {
-    const { repository, loaded } = Object.assign({}, options);
+    const { repository } = Object.assign({}, options);
     this.modelName = this.constructor.name.replace(/Repository$/, '');
     this.schema = this.constructor.schema();
-    this.loaded = loaded === undefined ? true : loaded;
     if (repository) this.repository = repository;
     if (!this.schema.id)
       Object.assign(this.schema, {
@@ -87,6 +87,10 @@ class Model {
       },
       { meta: { ...model.schema.meta, type: this.modelName } }
     );
+  }
+
+  loaded() {
+    return _.has(this, '$.cas');
   }
 
   async save(options = {}) {

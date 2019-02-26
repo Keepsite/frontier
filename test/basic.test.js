@@ -6,9 +6,6 @@ const Datastore = require('../src/Datastore');
 const Repository = require('../src/Repository');
 
 describe('Models', () => {
-  // Add long timeout in case of slow response on CI build servers.
-  // this.timeout(10000);
-
   it('should fail to register two models with the same name', () => {
     class TestModel extends Model {
       static schema() {}
@@ -412,7 +409,7 @@ describe('Models', () => {
         // TODO: think about this for non refs (used in this test)
         // Naturally it will be an unloaded reference, but this proves that
         // the ref has a 'loaded' function, meaning it's actually a reference.
-        assert.isFalse(thawed.anyRef.loaded);
+        assert.isFalse(thawed.anyRef.loaded());
       });
     });
   });
@@ -760,6 +757,7 @@ describe('Models', () => {
     const datastore = new Datastore({ Adapter: InMemoryAdapter });
     const repo = new Repository({ models: [TestModel], datastore });
     const x = new repo.models.TestModel({ name: 'George' });
+
     await x.save();
 
     const y = repo.models.TestModel.ref(x.id);
@@ -778,7 +776,7 @@ describe('Models', () => {
     assert.equal(y.name, z.name);
   });
 
-  it('should correctly manage Model.loaded', async () => {
+  it('should correctly manage Model.loaded()', async () => {
     class TestModel extends Model {
       static schema() {
         return { name: 'string' };
@@ -788,14 +786,14 @@ describe('Models', () => {
     const datastore = new Datastore({ Adapter: InMemoryAdapter });
     const repo = new Repository({ models: [TestModel], datastore });
     const x = new repo.models.TestModel({ name: 'George' });
-    assert.isTrue(x.loaded);
+    assert.isFalse(x.loaded());
     await x.save();
-    assert.isTrue(x.loaded);
+    assert.isTrue(x.loaded());
 
     const y = repo.models.TestModel.ref(x.id);
-    assert.isFalse(y.loaded);
+    assert.isFalse(y.loaded());
     await y.load();
-    assert.isTrue(y.loaded);
+    assert.isTrue(y.loaded());
   });
 
   it('should successfully load object with getById', async () => {

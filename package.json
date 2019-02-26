@@ -11,13 +11,13 @@
     "coverage": "nyc --reporter html mocha"
   },
   "dependencies": {
+    "couchbase": "^2.6.2",
     "eslint-plugin-jsx-a11y": "^6.1.2",
     "lodash": "^4.17.4",
     "uuid": "^3.3.2"
   },
   "devDependencies": {
     "chai": "^4.1.2",
-    "couchbase": "^2.6.2",
     "eslint": "^4.19.1",
     "eslint-config-airbnb": "^16.1.0",
     "eslint-config-prettier": "^2.9.0",

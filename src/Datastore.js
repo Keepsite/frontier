@@ -12,22 +12,22 @@ class Datastore {
 
   async load(model) {
     if (!model) throw new Error('Datastore::load() called without a model');
-    const result = await this.adapter.load(model);
-    Object.assign(model, result, { loaded: true });
-    return result;
+    const { cas, value } = await this.adapter.load(model);
+    Object.assign(model, value, { $: { cas } });
+    return model;
   }
 
   async save(model) {
     if (!model) throw new Error('Datastore::save() called without a model');
-    const result = await this.adapter.save(model);
-    Object.assign(model, result);
+    const { cas } = await this.adapter.save(model);
+    Object.assign(model, { $: { cas } });
     return model;
   }
 
   async remove(model) {
     if (!model) throw new Error('Datastore::remove() called without a model');
-    const result = await this.adapter.remove(model);
-    Object.assign(model, result);
+    const { cas } = await this.adapter.remove(model);
+    Object.assign(model, { $: { cas } });
     return model;
   }
 }
