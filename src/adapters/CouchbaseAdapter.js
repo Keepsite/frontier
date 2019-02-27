@@ -30,11 +30,53 @@ class CouchbaseAdapter extends Adapter {
         return resolve();
       });
     });
+
+    const indexes = await this.executeN1qlQuery(
+      `SELECT index_key, name, condition, state FROM system:indexes where keyspace_id = '${
+        this.bucket._name
+      }'`
+    );
+
+    if (!indexes.find(i => i.name === '#primary'))
+      await this.executeN1qlQuery(
+        `CREATE PRIMARY INDEX ON \`${this.bucket._name}\` USING GSI`
+      );
   }
 
   getModelKey({ modelName, id }) {
     const keySeperator = this.keySeperator || '|';
     return `${modelName}${keySeperator}${id}`;
+  }
+
+  executeN1qlQuery(queryString) {
+    const { bucket } = this;
+    return new Promise((resolve, reject) => {
+      bucket.query(N1qlQuery.fromString(queryString), (error, res) => {
+        if (error) return reject(error);
+        return resolve(res);
+      });
+    });
+  }
+
+  async find(modelName, query, options) {
+    if (!this.connected()) await this.connect();
+
+    // FIXME: basic query parsing
+    const where = Object.entries(query).reduce(
+      (result, [key, value]) =>
+        result
+          ? `${result} AND \`${key}\` = '${value}'`
+          : `WHERE \`${key}\` = '${value}'`,
+      null
+    );
+
+    const limit = options.limit ? `LIMIT ${options.limit}` : '';
+
+    const results = await this.executeN1qlQuery(
+      `SELECT * FROM \`${this.bucket._name}\` ${where} ${limit}`
+    );
+    const values = results.map(r => r[this.bucket._name]);
+    return { values };
   }
 
   async load(model) {
