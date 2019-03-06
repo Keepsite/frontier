@@ -3,6 +3,15 @@ const uuid = require('uuid');
 
 const Field = require('./Field');
 
+const hooks = [
+  'preSave',
+  'preLoad',
+  'preRemove',
+  'postSave',
+  'postLoad',
+  'postRemove',
+];
+
 // A Model takes a definition object
 class Model {
   static validate() {
@@ -69,6 +78,12 @@ class Model {
     const schemaKeys = Object.keys(this.schema);
     return new Proxy(this, {
       get(target, key) {
+        if (hooks.includes(key)) return target[key] || _.noop;
+        // {
+        //   throw new Error(
+        //     `${key} hook not found for ${this.constructor.name}`
+        //   );
+        // };
         if (schemaKeys.includes(key))
           return Reflect.get(target.fields[key], 'value');
         return Reflect.get(target, key);
@@ -115,25 +130,32 @@ class Model {
   }
 
   async save(options = {}) {
+    await this.preSave();
     const repo = options.repository || this.repository;
     if (!repo)
       throw new Error(`${this.modelName}::save() called without a repository`);
-    return repo.save(this);
+    repo.save(this);
+    await this.postSave();
+    return this;
   }
 
   async load(options = {}) {
+    await this.preLoad();
     const repo = options.repository || this.repository;
     if (!repo)
       throw new Error(`${this.modelName}::load() called without a repository`);
-    return repo.load(this);
+    await repo.load(this);
+    await this.postLoad();
+    return this;
   }
 
   async remove(options = {}) {
+    await this.preRemove();
     const repo = options.repository || this.repository;
     if (!repo)
       throw new Error(`${this.modelName}::load() called without a repository`);
     await repo.remove(this);
-    this.loaded = false;
+    await this.postRemove();
     return this;
   }
 }

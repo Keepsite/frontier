@@ -5,7 +5,7 @@ const InMemoryAdapter = require('../src/adapters/InMemoryAdapter');
 const Datastore = require('../src/Datastore');
 const Repository = require('../src/Repository');
 
-describe('Model references', () => {
+describe('Model References', () => {
   class Account extends Model {
     static schema() {
       return {
@@ -22,16 +22,6 @@ describe('Model references', () => {
         account: { ref: Account },
       };
     }
-
-    // static indicies() {
-    //   return {
-    //     findByUsername: {
-    //       type: 'n1ql',
-    //       by: 'username',
-    //       consistency: ottoman.Consistency.GLOBAL,
-    //     },
-    //   }
-    // }
   }
 
   class MultiAccountUser extends Model {
@@ -41,16 +31,6 @@ describe('Model references', () => {
         accounts: [{ ref: Account }],
       };
     }
-
-    // static indicies() {
-    //   return {
-    //     findByUsername: {
-    //       type: 'n1ql',
-    //       by: 'username',
-    //       consistency: ottoman.Consistency.GLOBAL,
-    //     },
-    //   }
-    // }
   }
 
   class MixedRefModel extends Model {
@@ -66,17 +46,6 @@ describe('Model references', () => {
     models: [Account, User, MultiAccountUser, MixedRefModel],
     datastore,
   });
-
-  // before(function(done) {
-  //   ottoman.ensureIndices(function(err) {
-  //     if (err) {
-  //       return done(err);
-  //     }
-  //     setTimeout(function() {
-  //       done();
-  //     }, 2000);
-  //   });
-  // });
 
   it('should allow mixed references', () => {
     const frontier = new Frontier({ models: [MixedRefModel] });
@@ -102,7 +71,6 @@ describe('Model references', () => {
 
       assert.typeOf(frozen.anyRef, 'object');
       assert.equal(frozen.anyRef.name, 'Frank');
-      // assert(frozen.anyRef[ottoman.ottomanType]).to.contain('throwaway');
 
       // Demonstrate that when we bring it back from coo, the reference is
       // intact, and doesn't throw an error related to unknown types.
