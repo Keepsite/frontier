@@ -1,14 +1,17 @@
-const _ = require('lodash');
-
 // A Repository takes a Datastore instance and optional Model Definitions
 // It is used with model instances to provide data access with a passthrough cache
 class Repository {
   constructor(options) {
-    const { models } = Object.assign(
+    const { models, datastore } = Object.assign(
       this,
+      // TODO: convert to allow for multiple datastores per repository
+      // TODO: add FB dataloader as a cache
       { models: {}, datastore: null },
       options
     );
+
+    if (!datastore)
+      throw new Error('Repository must have at least one Datastore');
 
     models.forEach(M => this.addModel(M));
   }
@@ -26,16 +29,6 @@ class Repository {
     });
 
     this.models[Model.name] = RepositoryModel;
-  }
-
-  fromJSON(json, type) {
-    const modelName = type || _.get(json, 'meta.type');
-    if (!modelName)
-      throw new TypeError('meta.type required to desearilise json objects');
-    const ModelType = this.models[modelName];
-    if (!ModelType)
-      throw new TypeError(`No model named '${modelName}' was found`);
-    return new ModelType(json);
   }
 
   async find(Model, query, options) {

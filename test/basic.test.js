@@ -60,7 +60,7 @@ describe('Models', () => {
     }
 
     const frontier = new Frontier({ models: [TestModel] });
-    assert.instanceOf(frontier, Repository);
+    assert.instanceOf(frontier, Frontier);
   });
 
   it('should understand all basic types in both schema formats, flat and object', () => {
@@ -734,12 +734,12 @@ describe('Models', () => {
       }
 
       const datastore = new Datastore({ Adapter: InMemoryAdapter });
-      const repo = new Repository({ models: [TestModel], datastore });
+      const repository = new Repository({ models: [TestModel], datastore });
       assert.isUndefined(TestModel.prototype.repository);
-      const x = new repo.models.TestModel({ name: 'George' });
+      const x = new repository.models.TestModel({ name: 'George' });
       await x.save();
 
-      const y = repo.models.TestModel.ref(x.id);
+      const y = repository.models.TestModel.ref(x.id);
       await y.load();
       assert.instanceOf(y, TestModel);
       assert.equal(x.id, y.id);
@@ -755,23 +755,23 @@ describe('Models', () => {
     }
 
     const datastore = new Datastore({ Adapter: InMemoryAdapter });
-    const repo = new Repository({ models: [TestModel], datastore });
-    const x = new repo.models.TestModel({ name: 'George' });
+    const repository = new Repository({ models: [TestModel], datastore });
+    const x = new repository.models.TestModel({ name: 'George' });
 
     await x.save();
 
-    const y = repo.models.TestModel.ref(x.id);
+    const y = repository.models.TestModel.ref(x.id);
     await y.load();
-    assert.instanceOf(y, repo.models.TestModel);
+    assert.instanceOf(y, repository.models.TestModel);
     assert.equal(x.id, y.id);
     assert.equal(x.name, y.name);
 
     y.name = 'Not George';
     await y.save();
 
-    const z = repo.models.TestModel.ref(x.id);
+    const z = repository.models.TestModel.ref(x.id);
     await z.load();
-    assert.instanceOf(y, repo.models.TestModel);
+    assert.instanceOf(y, repository.models.TestModel);
     assert.equal(y.id, z.id);
     assert.equal(y.name, z.name);
   });
@@ -784,13 +784,13 @@ describe('Models', () => {
     }
 
     const datastore = new Datastore({ Adapter: InMemoryAdapter });
-    const repo = new Repository({ models: [TestModel], datastore });
-    const x = new repo.models.TestModel({ name: 'George' });
+    const repository = new Repository({ models: [TestModel], datastore });
+    const x = new repository.models.TestModel({ name: 'George' });
     assert.isFalse(x.loaded());
     await x.save();
     assert.isTrue(x.loaded());
 
-    const y = repo.models.TestModel.ref(x.id);
+    const y = repository.models.TestModel.ref(x.id);
     assert.isFalse(y.loaded());
     await y.load();
     assert.isTrue(y.loaded());

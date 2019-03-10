@@ -41,6 +41,19 @@ class CouchbaseAdapter extends Adapter {
       await this.executeN1qlQuery(
         `CREATE PRIMARY INDEX ON \`${this.bucket._name}\` USING GSI`
       );
+
+    // {
+    //   index_key: ['`$type`'], // use Frontier type key
+    //   name: 'all_type',
+    // },
+    // {
+    //   index_key: ['`$id`'], // use Frontier id key
+    //   name: 'all_id',
+    // },
+    // {
+    //   index_key: ['`$type`', '`$id`'], // use Frontier id and type keys
+    //   name: 'all_type_id',
+    // },
   }
 
   getModelKey({ modelName, id }) {
