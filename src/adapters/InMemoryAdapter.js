@@ -8,15 +8,16 @@ class InMemoryAdapter extends Adapter {
     Object.assign(this, { db: {} }, config);
   }
 
-  getModelKey({ modelName, id }) {
+  getModelKey(model) {
     const keySeperator = this.keySeperator || '|';
-    return `${modelName}${keySeperator}${id}`;
+    return `${model.modelName}${keySeperator}${model.id()}`;
   }
 
-  find(modelName, query, options) {
+  find(modelName, query /* options */) {
     const typeValues = Object.values(this.db).filter(
       v => v.meta.type === modelName
     );
+
     const values = typeValues.filter(v =>
       Object.entries(query).reduce(
         (result, [key, value]) => result && v[key] === value,
@@ -24,12 +25,22 @@ class InMemoryAdapter extends Adapter {
       )
     );
 
-    return { values };
+    return values.reduce(
+      (result, value) => ({
+        ...result,
+        [`${modelName}|${value.$id}`]: { value, cas: uuid.v4() },
+      }),
+      {}
+    );
   }
 
   count(modelName, query, options) {
-    const { values } = this.find(modelName, query, options);
-    return values.length;
+    const results = this.find(modelName, query, options);
+    return Object.values(results).length;
+  }
+
+  flush() {
+    this.db = {};
   }
 
   load(model) {

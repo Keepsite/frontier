@@ -20,9 +20,9 @@ class Field {
     return Object.getPrototypeOf(type).name === 'Model';
   }
 
-  static isModelRef(modelRef) {
-    if (modelRef.constructor === ModelRef) {
-      return modelRef.type === 'Mixed' || Field.isModelType(modelRef.type);
+  static isModelRef(type) {
+    if (type.constructor === ModelRef) {
+      return type.type === 'Mixed' || Field.isModelType(type.type);
     }
     return false;
   }
@@ -109,6 +109,11 @@ class Field {
   getValue(data = this.value) {
     // console.log(`Field(${this.name})::getValue()`);
     if (!data && data !== false) return this.defaultValue();
+    // console.log({
+    //   name: this.name,
+    //   definition: this.definition,
+    //   modelRef: Field.isModelRef(this.type),
+    // });
 
     // Get Value of Nested and Reference models
     if (Field.isModelRef(this.type)) {
@@ -116,6 +121,7 @@ class Field {
         throw new Error(
           `ModelRef field '${this.name}' must not have primitive value`
         );
+      if (_.has(data, '$type')) return this.getModelInstance(data);
       if (_.has(data, 'meta.type')) return this.getModelInstance(data);
       return data;
     }
@@ -177,7 +183,8 @@ class Field {
   }
 
   getModelInstance(data) {
-    const modelName = data.modelName || _.get(data, 'meta.type');
+    const modelName =
+      data.modelName || _.get(data, 'meta.type') || _.get(data, '$type');
     if (!modelName)
       throw new Error(
         `Field::getModelInstance() data is not a model '${data}'`

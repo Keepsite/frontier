@@ -15,12 +15,17 @@ class Datastore {
       throw new Error('Datastore::find() called without a Model Definition');
 
     // TODO: parse find query into more managable format
-    const { values } = await this.adapter.find(
+    const values = await this.adapter.find(
       ModelDefinition.name,
       query,
       options
     );
-    return values.map(value => new ModelDefinition(value, options));
+
+    return Object.entries(values).map(([, { value, ...$ }]) => {
+      const model = new ModelDefinition(value, options);
+      Object.assign(model, { $ });
+      return model;
+    });
   }
 
   async count(ModelDefinition, query, options) {
@@ -35,10 +40,27 @@ class Datastore {
     return count;
   }
 
-  async load(model) {
+  async load(model, paths = []) {
+    // console.log('Datastore::load()', {
+    //   modelName: model.modelName,
+    //   id: model.id(),
+    //   paths,
+    //   loaded: model.loaded(),
+    // });
     if (!model) throw new Error('Datastore::load() called without a model');
-    const { value, ...$ } = await this.adapter.load(model);
-    Object.assign(model, value, { $ });
+    if (!model.loaded()) {
+      // TODO: may be able to replace this with path '.'
+      const { value, ...$ } = await this.adapter.load(model);
+      Object.assign(model, value, { $ });
+    }
+    await Promise.all(
+      paths.map(path => {
+        const modelField = model[path];
+        return this.adapter
+          .load(modelField)
+          .then(({ value, ...$ }) => Object.assign(modelField, value, { $ }));
+      })
+    );
     return model;
   }
 
@@ -54,6 +76,10 @@ class Datastore {
     const $ = await this.adapter.remove(model);
     Object.assign(model, { $ });
     return model;
+  }
+
+  async flush() {
+    return this.adapter.flush();
   }
 }
 

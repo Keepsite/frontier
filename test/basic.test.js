@@ -157,7 +157,7 @@ describe('Models', () => {
     const frontier = new Frontier({ models: [TestModel] });
     const x = new TestModel();
     x.name = 'Frank';
-    const xJson = x.toJSON(x);
+    const xJson = x.toJSON();
     const xObj = frontier.fromJSON(xJson);
 
     assert.instanceOf(xObj, TestModel);
@@ -174,7 +174,7 @@ describe('Models', () => {
     const frontier = new Frontier({ models: [TestModel] });
     const x = new TestModel();
     x.name = 'Frank';
-    const xJson = x.toJSON(x);
+    const xJson = x.toJSON();
 
     assert.throw(() => frontier.fromJSON(xJson, 'InvalidType'), TypeError);
   });
@@ -189,7 +189,7 @@ describe('Models', () => {
     const frontier = new Frontier({ models: [TestModel] });
     const x = new TestModel();
     x.name = 'Frank';
-    const xCoo = x.toJSON(x);
+    const xCoo = x.toJSON();
     const xObj = frontier.fromJSON(xCoo, x.constructor.name);
 
     assert.instanceOf(xObj, TestModel);
@@ -694,10 +694,10 @@ describe('Models', () => {
       const x = new TestModel({ name: 'George' }, { repository });
       await x.save();
 
-      const y = TestModel.ref(x.id, { repository });
+      const y = TestModel.ref(x.id(), { repository });
       await y.load();
       assert.instanceOf(y, TestModel);
-      assert.equal(x.id, y.id);
+      assert.equal(x.id(), y.id());
       assert.equal(x.name, y.name);
     });
 
@@ -716,10 +716,10 @@ describe('Models', () => {
       const x = new TestModel({ name: 'George' });
       await x.save({ repository });
 
-      const y = TestModel.ref(x.id);
+      const y = TestModel.ref(x.id());
       await y.load({ repository });
       assert.instanceOf(y, TestModel);
-      assert.equal(x.id, y.id);
+      assert.equal(x.id(), y.id());
       assert.equal(x.name, y.name);
     });
 
@@ -739,10 +739,10 @@ describe('Models', () => {
       const x = new repository.models.TestModel({ name: 'George' });
       await x.save();
 
-      const y = repository.models.TestModel.ref(x.id);
+      const y = repository.models.TestModel.ref(x.id());
       await y.load();
       assert.instanceOf(y, TestModel);
-      assert.equal(x.id, y.id);
+      assert.equal(x.id(), y.id());
       assert.equal(x.name, y.name);
     });
   });
@@ -759,20 +759,19 @@ describe('Models', () => {
     const x = new repository.models.TestModel({ name: 'George' });
 
     await x.save();
-
-    const y = repository.models.TestModel.ref(x.id);
+    const y = repository.models.TestModel.ref(x.id());
     await y.load();
     assert.instanceOf(y, repository.models.TestModel);
-    assert.equal(x.id, y.id);
+    assert.equal(x.id(), y.id());
     assert.equal(x.name, y.name);
 
     y.name = 'Not George';
     await y.save();
 
-    const z = repository.models.TestModel.ref(x.id);
+    const z = repository.models.TestModel.ref(x.id());
     await z.load();
     assert.instanceOf(y, repository.models.TestModel);
-    assert.equal(y.id, z.id);
+    assert.equal(y.id(), z.id());
     assert.equal(y.name, z.name);
   });
 
@@ -790,7 +789,7 @@ describe('Models', () => {
     await x.save();
     assert.isTrue(x.loaded());
 
-    const y = repository.models.TestModel.ref(x.id);
+    const y = repository.models.TestModel.ref(x.id());
     assert.isFalse(y.loaded());
     await y.load();
     assert.isTrue(y.loaded());
@@ -809,9 +808,9 @@ describe('Models', () => {
     const x = new repository.models.TestModel({ name: 'George' });
     await x.save();
 
-    const y = await repository.models.TestModel.getById(x.id);
+    const y = await repository.models.TestModel.getById(x.id());
     assert.instanceOf(y, TestModel);
-    assert.equal(x.id, y.id);
+    assert.equal(x.id(), y.id());
     assert.equal(x.name, y.name);
   });
 
@@ -827,11 +826,11 @@ describe('Models', () => {
     const x = new repository.models.TestModel({ name: 'George' });
     await x.save();
 
-    await repository.models.TestModel.getById(x.id);
+    await repository.models.TestModel.getById(x.id());
     await x.remove();
 
     let error = null;
-    await TestModel.getById(x.id).catch(e => {
+    await TestModel.getById(x.id()).catch(e => {
       error = e;
     });
     assert.isNotNull(error);

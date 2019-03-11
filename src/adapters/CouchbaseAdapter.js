@@ -2,19 +2,50 @@ const _ = require('lodash');
 const { Cluster, N1qlQuery } = require('couchbase');
 
 const Adapter = require('../Adapter');
+const Model = require('../Model');
+
+// More info on N1qlQuery class
+// http://docs.couchbase.com/sdk-api/couchbase-node-client-2.6.1/N1qlQuery.html
+const ProfileType = {
+  // Disables profiling. This is the default
+  PROFILE_NONE: 'off',
+  // This enables phase profiling.
+  PROFILE_PHASES: 'phases',
+  // This enables general timing profiling.
+  PROFILE_TIMINGS: 'timings',
+};
+
+const Consistency = {
+  // This is the default (for single-statement requests).
+  NOT_BOUNDED: 1,
+  // This implements strong consistency per request.
+  REQUEST_PLUS: 2,
+  // This implements strong consistency per statement.
+  STATEMENT_PLUS: 3,
+};
 
 class CouchbaseAdapter extends Adapter {
   constructor({ config }) {
     super();
     this.config = Object.assign(
       {
-        cluster: null,
-        bucket: null,
+        cluster: 'couchbase://localhost',
+        bucketName: 'default',
         username: null,
-        password: null,
+        password: 'password1',
+        profile: ProfileType.PROFILE_NONE,
+        consistency: Consistency.STATEMENT_PLUS,
       },
       config
     );
+
+    //   {
+    //     cluster: null,
+    //     bucket: null,
+    //     username: null,
+    //     password: null,
+    //     consistency: Consistency.NOT_BOUNDED,
+    //   },
   }
 
   connected() {
@@ -22,10 +53,10 @@ class CouchbaseAdapter extends Adapter {
   }
 
   async connect() {
-    const { cluster, bucket, password } = this.config;
+    const { cluster, bucketName, password } = this.config;
     this.cluster = new Cluster(cluster);
     await new Promise((resolve, reject) => {
-      this.bucket = this.cluster.openBucket(bucket, password, error => {
+      this.bucket = this.cluster.openBucket(bucketName, password, error => {
         if (error) return reject(error);
         return resolve();
       });
@@ -43,53 +74,150 @@ class CouchbaseAdapter extends Adapter {
       );
 
     // {
-    //   index_key: ['`$type`'], // use Frontier type key
+    //   index_key: ['`$type`'], // use type key
     //   name: 'all_type',
     // },
     // {
-    //   index_key: ['`$id`'], // use Frontier id key
+    //   index_key: ['`$id`'], // use id key
     //   name: 'all_id',
     // },
     // {
-    //   index_key: ['`$type`', '`$id`'], // use Frontier id and type keys
+    //   index_key: ['`$type`', '`$id`'], // use id and type keys
     //   name: 'all_type_id',
     // },
   }
 
-  getModelKey({ modelName, id }) {
-    const keySeperator = this.keySeperator || '|';
-    return `${modelName}${keySeperator}${id}`;
+  async flush() {
+    if (!this.connected()) await this.connect();
+    const { bucketName } = this.config;
+    await this.executeN1qlQuery(`DELETE from \`${bucketName}\``);
   }
 
-  executeN1qlQuery(queryString) {
-    const { bucket } = this;
+  getModelKey(model) {
+    const keySeperator = this.keySeperator || '|';
+    return `${model.modelName}${keySeperator}${model.id()}`;
+  }
+
+  executeN1qlQuery(queryString, options = {}) {
+    const { bucket, config } = this;
+    const { consistency, profile } = Object.assign(
+      {
+        profile: config.profile,
+        consistency: config.consistency,
+      },
+      options
+    );
     return new Promise((resolve, reject) => {
-      bucket.query(N1qlQuery.fromString(queryString), (error, res) => {
+      const query = N1qlQuery.fromString(queryString);
+      query.profile(profile);
+      query.consistency(consistency);
+      bucket.query(query, (error, res) => {
         if (error) return reject(error);
         return resolve(res);
       });
     });
   }
 
+  buildFilterExpression(filters = {}, nodes = []) {
+    const expressions = [];
+    const SPECIAL_KEYS = [
+      '$EXISTS',
+      '$CONTAINS',
+      '$LIKE',
+      '$MISSING',
+      '$OR',
+      '$NOT',
+    ];
+
+    Object.entries(filters).forEach(([key, value]) => {
+      const KEY = key.toUpperCase();
+      const nodePath = `\`${nodes.join('`.`')}\``;
+      const keyNodes = [...nodes, ...key.split('.')];
+      const keyPath = `\`${keyNodes.join('`.`')}\``;
+
+      if (SPECIAL_KEYS.includes(KEY)) {
+        if (KEY === '$MISSING') expressions.push(`${nodePath} IS MISSING`);
+        if (KEY === '$EXISTS') expressions.push(`${nodePath} IS VALUED`);
+        if (KEY === '$LIKE')
+          expressions.push(`lower(${nodePath}) LIKE lower('${value}')`);
+        if (KEY === '$CONTAINS') {
+          if (value instanceof Object) {
+            const subexpression = this.buildFilterExpression(value, ['x']);
+            expressions.push(
+              `ANY x IN ${nodePath} SATISFIES ${subexpression.join(
+                ' AND '
+              )} END`
+            );
+          } else {
+            expressions.push(
+              `ANY x IN ${nodePath} SATISFIES x = '${value}' END`
+            );
+          }
+        }
+        if (KEY === '$OR') {
+          const booleanExpression =
+            value.constructor === Array
+              ? value.reduce(
+                  (result, v) => [
+                    ...result,
+                    ...this.buildFilterExpression(v, nodes),
+                  ],
+                  []
+                )
+              : this.buildFilterExpression(value, nodes);
+
+          expressions.push(`(${booleanExpression.join(' OR ')})`);
+        }
+        if (KEY === '$NOT') {
+          const booleanExpression =
+            value.constructor === Array
+              ? value.reduce(
+                  (result, v) => [
+                    ...result,
+                    ...this.buildFilterExpression(v, nodes),
+                  ],
+                  []
+                )
+              : this.buildFilterExpression(value, nodes);
+
+          expressions.push(`NOT (${booleanExpression.join(' OR ')})`);
+        }
+      } else if (value instanceof Model) {
+        const model = { $ref: value.id(), $type: value.constructor.type };
+        expressions.push(...this.buildFilterExpression(model, [...nodes]));
+      } else if (value instanceof Object) {
+        expressions.push(...this.buildFilterExpression(value, [...nodes, key]));
+      } else if (typeof value === 'number' || typeof value === 'boolean') {
+        expressions.push(`${keyPath}=${value}`);
+      } else if (typeof value === 'string') {
+        expressions.push(`${keyPath}="${value}"`);
+      }
+    });
+
+    return expressions;
+  }
+
   async find(modelName, query, options) {
     if (!this.connected()) await this.connect();
-
-    // FIXME: basic query parsing
-    const where = Object.entries(query).reduce(
-      (result, [key, value]) =>
-        result
-          ? `${result} AND \`${key}\` = '${value}'`
-          : `WHERE \`${key}\` = '${value}'`,
-      null
-    );
-
-    const limit = options.limit ? `LIMIT ${options.limit}` : '';
+    const { bucket } = this;
+    const bucketName = bucket._name;
+    const typeQS = ` WHERE \`meta\`.\`type\`='${modelName}'`;
+    const where = this.buildFilterExpression(query);
+    const whereQS = where.length ? `AND ${where.join(' AND ')}` : '';
+    const limitQS = options.limit ? `LIMIT ${options.limit}` : '';
 
     const results = await this.executeN1qlQuery(
-      `SELECT * FROM \`${this.bucket._name}\` ${where} ${limit}`
+      `SELECT META(b).id AS id FROM \`${bucketName}\` b ${typeQS} ${whereQS} ${limitQS}`,
+      _.pick(options, ['consistency', 'profile'])
     );
-    const values = results.map(r => r[this.bucket._name]);
-    return { values };
+    if (!results.length) return [];
+    return new Promise((resolve, reject) => {
+      const keys = results.map(r => r.id);
+      bucket.getMulti(keys, (error, res) => {
+        if (error) return reject(error);
+        return resolve(res);
+      });
+    });
   }
 
   async load(model) {
@@ -102,6 +230,7 @@ class CouchbaseAdapter extends Adapter {
         return resolve(res);
       });
     });
+    // FIXME: this is never hit as couchnode throws an error without the key
     if (!result) throw new Error(`record '${key}' missing`);
     return result;
   }
@@ -112,10 +241,15 @@ class CouchbaseAdapter extends Adapter {
     const key = this.getModelKey(model);
     const options = { cas: _.get(model, '$.cas') };
     const result = new Promise((resolve, reject) => {
-      bucket.upsert(key, model.toJSON(), options, (error, res) => {
-        if (error) return reject(error);
-        return resolve(res);
-      });
+      bucket.upsert(
+        key,
+        model.toJSON({ shallow: true }),
+        options,
+        (error, res) => {
+          if (error) return reject(error);
+          return resolve(res);
+        }
+      );
     });
     return result;
   }
@@ -135,4 +269,6 @@ class CouchbaseAdapter extends Adapter {
   }
 }
 
+CouchbaseAdapter.ProfileType = ProfileType;
+CouchbaseAdapter.Consistency = Consistency;
 module.exports = CouchbaseAdapter;

@@ -1,5 +1,9 @@
 // A adaptor is used as the interface between Frontier and a Database
 class Adapter {
+  async flush() {
+    throw new Error(`${this.constructor.name}::flush() is not yet implemented`);
+  }
+
   async create(/* options */) {
     throw new Error(
       `${this.constructor.name}::create() is not yet implemented`

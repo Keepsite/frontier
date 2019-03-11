@@ -1,7 +1,7 @@
 const { assert } = require('chai');
 const Frontier = require('../src');
 const Model = require('../src/Model');
-const InMemoryAdapter = require('../src/adapters/InMemoryAdapter');
+const CouchbaseAdapter = require('../src/adapters/CouchbaseAdapter');
 const Datastore = require('../src/Datastore');
 const Repository = require('../src/Repository');
 
@@ -37,11 +37,12 @@ describe('Model References', () => {
     static schema() {
       return {
         anyRef: { ref: 'Mixed' },
+        anyRefEmbedded: { type: 'Mixed' },
       };
     }
   }
 
-  const store = new Datastore({ Adapter: InMemoryAdapter });
+  const store = new Datastore({ Adapter: CouchbaseAdapter });
   const repository = new Repository({
     models: [Account, User, MultiAccountUser, MixedRefModel],
     store,
@@ -66,11 +67,14 @@ describe('Model References', () => {
       frontier.addModel(M);
 
       const instance = new M({ name: 'Frank' });
-      const mixer = new MixedRefModel({ anyRef: instance });
+      const mixer = new MixedRefModel({
+        anyRef: instance,
+        anyRefEmbedded: instance,
+      });
       const frozen = mixer.toJSON();
 
-      assert.typeOf(frozen.anyRef, 'object');
-      assert.equal(frozen.anyRef.name, 'Frank');
+      assert.typeOf(frozen.anyRefEmbedded, 'object');
+      assert.equal(frozen.anyRefEmbedded.name, 'Frank');
 
       // Demonstrate that when we bring it back from coo, the reference is
       // intact, and doesn't throw an error related to unknown types.
@@ -83,8 +87,8 @@ describe('Model References', () => {
     });
   });
 
-  it('disallow non-reference values in mixed references', () => {
-    // Horribly illegal, Frank is not a reference.
+  it('should disallow non-reference values in mixed references', () => {
+    // Frank is a string not a reference.
     assert.throw(() => new MixedRefModel({ anyRef: 'Frank' }));
   });
 
@@ -97,23 +101,36 @@ describe('Model References', () => {
 
   it('should permit referencing two models together', async () => {
     const account = new Account({
-      email: 'danlannz@fakemail.com',
+      email: 'danlan@fakemail.com',
       name: 'Daniel Landers',
     });
 
-    const user = new User({
-      username: 'danlannz',
-      account,
-    });
+    const user = new User({ username: 'danlan', account });
 
     await account.save({ repository });
     await user.save({ repository });
 
-    const myUser = await User.findOne({ username: 'danlannz' }, { repository });
+    const myUser = await User.findOne({ username: 'danlan' }, { repository });
     assert.isFalse(myUser.account.loaded());
 
-    await myUser.account.load({ repository });
-    assert.equal(myUser.account.email, 'danlannz@fakemail.com');
+    await myUser.load(['account'], { repository });
+    assert.equal(myUser.account.email, 'danlan@fakemail.com');
+  });
+
+  it('should store reference objects for child model refs', async () => {
+    const account = new Account({
+      email: 'jb@fakemail.com',
+      name: 'Jason Bourne',
+    });
+    await User.create({ id: 123, username: 'jb', account }, { repository });
+
+    const user = await User.getById(123, { repository });
+    assert.isOk(user);
+    const jsonUser = user.toJSON();
+
+    assert.equal(Object.keys(jsonUser.account).length, 2);
+    assert.equal(jsonUser.account.$ref, account.id());
+    assert.equal(jsonUser.account.$type, account.modelName);
   });
 
   it('should allow re-linking of models', async () => {

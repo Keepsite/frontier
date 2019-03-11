@@ -24,7 +24,7 @@ class Repository {
     class RepositoryModel extends Model {}
     RepositoryModel.prototype.repository = repository;
     Object.defineProperty(RepositoryModel, 'name', {
-      value: `${Model.name}Repository`,
+      value: Model.name, // `${Model.name}Repository`
     });
 
     this.models[Model.name] = RepositoryModel;
@@ -57,10 +57,10 @@ class Repository {
     return result;
   }
 
-  async load(modelInstance) {
+  async load(modelInstance, paths) {
     // console.log('Repository::load()');
     // TODO: inspect the cache
-    await this.store.load(modelInstance);
+    await this.store.load(modelInstance, paths);
     return modelInstance;
     // throw new Error('Repository::load() is not yet implemented');
   }

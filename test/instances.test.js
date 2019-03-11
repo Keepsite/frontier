@@ -2,9 +2,6 @@ const { assert, expect } = require('chai');
 const uuid = require('uuid');
 const Frontier = require('../src');
 const Model = require('../src/Model');
-const InMemoryAdapter = require('../src/adapters/InMemoryAdapter');
-const Datastore = require('../src/Datastore');
-const Repository = require('../src/Repository');
 
 describe('Model Instances', () => {
   class TestModel extends Model {
@@ -80,7 +77,7 @@ describe('Model Instances', () => {
 
   it('should support loadAll', async () => {
     const testData = [...Array(10)].map(
-      n => new TestModel({ name: `Test ${n}` })
+      (_, n) => new TestModel({ name: `Test ${n}` })
     );
     await Promise.all(testData.map(m => m.save({ repository })));
 

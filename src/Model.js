@@ -92,7 +92,9 @@ class Model {
     const { repository } = Object.assign({}, options);
     const idKey = this.constructor.idKey();
     const typeKey = this.constructor.typeKey();
-    this.modelName = this.constructor.name.replace(/Repository$/, '');
+
+    // this.modelName = this.constructor.name.replace(/Repository$/, '');
+    this.modelName = this.constructor.name;
     this.schema = this.constructor.schema();
     if (repository) this.repository = repository;
     if (!this.schema)
@@ -117,7 +119,8 @@ class Model {
         [name]: new Field({
           name,
           definition,
-          value: data[name],
+          value:
+            name === idKey ? data.$ref || data.id || data[idKey] : data[name],
         }),
       }),
       {}
@@ -144,7 +147,9 @@ class Model {
     return this[idKey];
   }
 
-  toJSON(model = this) {
+  toJSON(options = {}) {
+    const { shallow } = Object.assign({ shallow: false }, options);
+    const model = this;
     return Object.entries(model.fields).reduce(
       (result, [name, field]) => {
         if (name === 'meta') return result;
@@ -153,7 +158,7 @@ class Model {
           if (value.constructor === Array) {
             return {
               ...result,
-              [name]: value.map(v => v.toJSON()),
+              [name]: value.map(v => (typeof v === 'object' ? v.toJSON() : v)),
             };
           }
           if (typeof value === 'object') {
@@ -163,6 +168,16 @@ class Model {
               field.type === 'Mixed' ||
               field.type.constructor === Field.ModelRef
             ) {
+              if (
+                Field.isModelRef(field.type) &&
+                (!value.loaded() || shallow)
+              ) {
+                const ref = {
+                  $ref: value.id(),
+                  $type: value.modelName,
+                };
+                return { ...result, [name]: ref };
+              }
               return { ...result, [name]: value.toJSON() };
             }
           }
@@ -187,12 +202,22 @@ class Model {
     return this;
   }
 
-  async load(options = {}) {
+  async load(...args) {
+    let paths = [];
+    let options = {};
+    if (args[0]) {
+      if (args[0].constructor === Object) {
+        [options] = args;
+      } else {
+        [paths, options] = args;
+      }
+    }
+
     await this.preLoad();
     const repo = options.repository || this.repository;
     if (!repo)
       throw new Error(`${this.modelName}::load() called without a repository`);
-    await repo.load(this);
+    await repo.load(this, [].concat(paths));
     await this.postLoad();
     return this;
   }
