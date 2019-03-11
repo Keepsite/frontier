@@ -128,8 +128,8 @@ describe('Models', () => {
     assert.typeOf(xJson.meta, 'object');
     assert.typeOf(xJson.meta.type, 'string');
     assert.equal(xJson.meta.type, 'TestModel');
-    assert.typeOf(xJson.id, 'string');
-    assert.equal(xJson.id, x.id);
+    assert.typeOf(xJson.$id, 'string');
+    assert.equal(xJson.$id, x.id());
     assert.isUndefined(xJson.name);
   });
 
@@ -689,8 +689,8 @@ describe('Models', () => {
         }
       }
 
-      const datastore = new Datastore({ Adapter: InMemoryAdapter });
-      const repository = new Repository({ models: [], datastore });
+      const store = new Datastore({ Adapter: InMemoryAdapter });
+      const repository = new Repository({ models: [], store });
       const x = new TestModel({ name: 'George' }, { repository });
       await x.save();
 
@@ -711,8 +711,8 @@ describe('Models', () => {
         }
       }
 
-      const datastore = new Datastore({ Adapter: InMemoryAdapter });
-      const repository = new Repository({ models: [], datastore });
+      const store = new Datastore({ Adapter: InMemoryAdapter });
+      const repository = new Repository({ models: [], store });
       const x = new TestModel({ name: 'George' });
       await x.save({ repository });
 
@@ -733,8 +733,8 @@ describe('Models', () => {
         }
       }
 
-      const datastore = new Datastore({ Adapter: InMemoryAdapter });
-      const repository = new Repository({ models: [TestModel], datastore });
+      const store = new Datastore({ Adapter: InMemoryAdapter });
+      const repository = new Repository({ models: [TestModel], store });
       assert.isUndefined(TestModel.prototype.repository);
       const x = new repository.models.TestModel({ name: 'George' });
       await x.save();
@@ -754,8 +754,8 @@ describe('Models', () => {
       }
     }
 
-    const datastore = new Datastore({ Adapter: InMemoryAdapter });
-    const repository = new Repository({ models: [TestModel], datastore });
+    const store = new Datastore({ Adapter: InMemoryAdapter });
+    const repository = new Repository({ models: [TestModel], store });
     const x = new repository.models.TestModel({ name: 'George' });
 
     await x.save();
@@ -783,8 +783,8 @@ describe('Models', () => {
       }
     }
 
-    const datastore = new Datastore({ Adapter: InMemoryAdapter });
-    const repository = new Repository({ models: [TestModel], datastore });
+    const store = new Datastore({ Adapter: InMemoryAdapter });
+    const repository = new Repository({ models: [TestModel], store });
     const x = new repository.models.TestModel({ name: 'George' });
     assert.isFalse(x.loaded());
     await x.save();
@@ -803,8 +803,8 @@ describe('Models', () => {
       }
     }
 
-    const datastore = new Datastore({ Adapter: InMemoryAdapter });
-    const repository = new Repository({ models: [TestModel], datastore });
+    const store = new Datastore({ Adapter: InMemoryAdapter });
+    const repository = new Repository({ models: [TestModel], store });
 
     const x = new repository.models.TestModel({ name: 'George' });
     await x.save();
@@ -822,8 +822,8 @@ describe('Models', () => {
       }
     }
 
-    const datastore = new Datastore({ Adapter: InMemoryAdapter });
-    const repository = new Repository({ models: [TestModel], datastore });
+    const store = new Datastore({ Adapter: InMemoryAdapter });
+    const repository = new Repository({ models: [TestModel], store });
     const x = new repository.models.TestModel({ name: 'George' });
     await x.save();
 
@@ -854,8 +854,8 @@ describe('Models', () => {
   //     }
   //   }
 
-  //   const datastore = new Datastore({ Adapter: InMemoryAdapter });
-  //   const repository = new Repository({ models: [TestModel], datastore });
+  //   const store = new Datastore({ Adapter: InMemoryAdapter });
+  //   const repository = new Repository({ models: [TestModel], store });
   //   const x = new repository.models.TestModel({ name: 'George' });
   //   await x.save();
 
@@ -873,8 +873,8 @@ describe('Models', () => {
       }
     }
 
-    const datastore = new Datastore({ Adapter: InMemoryAdapter });
-    const repository = new Repository({ models: [TestModel], datastore });
+    const store = new Datastore({ Adapter: InMemoryAdapter });
+    const repository = new Repository({ models: [TestModel], store });
 
     const y = repository.models.TestModel.ref('INVALID ID');
     let error = null;
@@ -891,8 +891,8 @@ describe('Models', () => {
       }
     }
 
-    const datastore = new Datastore({ Adapter: InMemoryAdapter });
-    const repository = new Repository({ models: [TestModel], datastore });
+    const store = new Datastore({ Adapter: InMemoryAdapter });
+    const repository = new Repository({ models: [TestModel], store });
 
     let error = null;
     await repository.models.TestModel.getById('INVALID ID').catch(e => {

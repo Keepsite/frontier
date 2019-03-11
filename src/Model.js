@@ -14,6 +14,14 @@ const hooks = [
 
 // A Model takes a definition object
 class Model {
+  static idKey() {
+    return '$id';
+  }
+
+  static typeKey() {
+    return '$type';
+  }
+
   static validate() {
     const instance = new this();
     return !!instance;
@@ -21,6 +29,14 @@ class Model {
 
   static ref(id, options) {
     return new this({ id }, { ...options });
+  }
+
+  static async create(data = {}, options = {}) {
+    const repository = options.repository || this.prototype.repository;
+    if (!repository)
+      throw new Error(`${this.name}::create() called without a repository`);
+    const modelInstance = new this(data, options);
+    return repository.create(modelInstance, options);
   }
 
   static async getById(id, options = {}) {
@@ -40,6 +56,14 @@ class Model {
     return repository.find(this, query, options);
   }
 
+  static async count(query, options = {}) {
+    const repository = options.repository || this.prototype.repository;
+    if (!repository)
+      throw new Error(`${this.name}::count() called without a repository`);
+
+    return repository.count(this, query, options);
+  }
+
   static async findOne(query, options = {}) {
     const repository = options.repository || this.prototype.repository;
     if (!repository)
@@ -48,16 +72,40 @@ class Model {
     return repository.findOne(this, query, options);
   }
 
+  static async loadAll(models, options = {}) {
+    const repo = options.repository || this.prototype.repository;
+    if (!repo)
+      throw new Error(
+        `${this.modelName}::loadAll() called without a repository`
+      );
+    await Promise.all(
+      models.map(async m => {
+        await m.preLoad();
+        await repo.load(m);
+        await m.postLoad();
+      })
+    );
+    return models;
+  }
+
   constructor(data = {}, options) {
     const { repository } = Object.assign({}, options);
+    const idKey = this.constructor.idKey();
+    const typeKey = this.constructor.typeKey();
     this.modelName = this.constructor.name.replace(/Repository$/, '');
     this.schema = this.constructor.schema();
     if (repository) this.repository = repository;
-    if (!this.schema.id)
+    if (!this.schema)
+      throw new Error(`Model '${this.modelName}' is missing a schema object`);
+    if (!this.schema.id && !this.schema[idKey])
       Object.assign(this.schema, {
-        id: { type: 'string', default: () => uuid.v4(), required: 'true' },
+        [idKey]: {
+          type: 'string',
+          default: () => uuid.v4(),
+          required: 'true',
+        },
       });
-    if (typeof this.schema.id.default !== 'function')
+    if (typeof this.schema[idKey].default !== 'function')
       throw new Error(
         `Model '${this.modelName}' is missing a default function for Field 'id'`
       );
@@ -79,11 +127,6 @@ class Model {
     return new Proxy(this, {
       get(target, key) {
         if (hooks.includes(key)) return target[key] || _.noop;
-        // {
-        //   throw new Error(
-        //     `${key} hook not found for ${this.constructor.name}`
-        //   );
-        // };
         if (schemaKeys.includes(key))
           return Reflect.get(target.fields[key], 'value');
         return Reflect.get(target, key);
@@ -94,6 +137,11 @@ class Model {
         return Reflect.set(target, key, value);
       },
     });
+  }
+
+  id() {
+    const idKey = this.constructor.idKey();
+    return this[idKey];
   }
 
   toJSON(model = this) {

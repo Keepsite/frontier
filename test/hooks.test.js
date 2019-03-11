@@ -37,8 +37,8 @@ describe('Model Hooks', () => {
       // Set hanlder...
       TestModel.prototype[hook] = callMeOnEvent;
 
-      const datastore = new Datastore({ Adapter: InMemoryAdapter });
-      const repository = new Repository({ models: [TestModel], datastore });
+      const store = new Datastore({ Adapter: InMemoryAdapter });
+      const repository = new Repository({ models: [TestModel], store });
 
       const x = new TestModel({ name: `Hello ${Math.random()}` });
 

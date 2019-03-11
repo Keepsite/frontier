@@ -27,6 +27,11 @@ class InMemoryAdapter extends Adapter {
     return { values };
   }
 
+  count(modelName, query, options) {
+    const { values } = this.find(modelName, query, options);
+    return values.length;
+  }
+
   load(model) {
     const key = this.getModelKey(model);
     const value = this.db[key];

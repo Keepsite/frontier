@@ -1,17 +1,16 @@
 // A Repository takes a Datastore instance and optional Model Definitions
 // It is used with model instances to provide data access with a passthrough cache
 class Repository {
-  constructor(options) {
-    const { models, datastore } = Object.assign(
-      this,
-      // TODO: convert to allow for multiple datastores per repository
-      // TODO: add FB dataloader as a cache
-      { models: {}, datastore: null },
-      options
-    );
+  constructor({ models, store, options = {} }) {
+    Object.assign(this, { models: {}, store, options });
+    // TODO: convert to allow for multiple stores per repository
+    // TODO: add FB dataloader as a cache
 
-    if (!datastore)
-      throw new Error('Repository must have at least one Datastore');
+    if (!store) {
+      if (!options.defaultStore)
+        throw new Error('Repository must have at least one Datastore');
+      this.store = options.defaultStore;
+    }
 
     models.forEach(M => this.addModel(M));
   }
@@ -21,7 +20,7 @@ class Repository {
     if (this.models[Model.name])
       throw new Error(`Duplicate Model '${Model.name}'`);
     // eslint-disable-next-line no-new
-    Model.validate(); // validate model
+    Model.validate();
     class RepositoryModel extends Model {}
     RepositoryModel.prototype.repository = repository;
     Object.defineProperty(RepositoryModel, 'name', {
@@ -31,41 +30,52 @@ class Repository {
     this.models[Model.name] = RepositoryModel;
   }
 
+  async create(modelInstance, options) {
+    await this.store.save(modelInstance, options);
+    return modelInstance;
+  }
+
   async find(Model, query, options) {
     // TODO: inspect the query cache
-    const results = await this.datastore.find(Model, query, options);
+    const results = await this.store.find(Model, query, options);
     return results;
+  }
+
+  async count(Model, query, options) {
+    // TODO: inspect the query cache
+    const result = await this.store.count(Model, query, options);
+    return result;
   }
 
   // TODO: review findOne implementation
   async findOne(Model, query, options) {
     // TODO: inspect the cache
-    const [result] = await this.datastore.find(Model, query, {
+    const [result] = await this.store.find(Model, query, {
       ...options,
       limit: 1,
     });
     return result;
   }
 
-  async load(model) {
+  async load(modelInstance) {
     // console.log('Repository::load()');
     // TODO: inspect the cache
-    await this.datastore.load(model);
-    return model;
+    await this.store.load(modelInstance);
+    return modelInstance;
     // throw new Error('Repository::load() is not yet implemented');
   }
 
-  async save(model) {
+  async save(modelInstance) {
     // TODO: update the cache
-    await this.datastore.save(model);
-    return model;
+    await this.store.save(modelInstance);
+    return modelInstance;
     // throw new Error('Repository::save() is not yet implemented');
   }
 
-  async remove(model) {
+  async remove(modelInstance) {
     // TODO: update the cache
-    await this.datastore.remove(model);
-    return model;
+    await this.store.remove(modelInstance);
+    return modelInstance;
     // throw new Error('Repository::remove() is not yet implemented');
   }
 }

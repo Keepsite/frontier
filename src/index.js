@@ -5,21 +5,38 @@ const InMemoryAdapter = require('./adapters/InMemoryAdapter');
 
 // Stores Model definitions / datastores and creates repositories from those
 class Frontier {
-  constructor({ models, datastores = [] }) {
-    Object.assign(this, { models, datastores });
+  constructor({ models = [], datastores = [], options = {} }) {
+    Object.assign(this, {
+      models,
+      datastores,
+      options: Object.assign(
+        {
+          defaultStore: new Datastore({ Adapter: InMemoryAdapter }),
+        },
+        options
+      ),
+    });
 
-    // TODO: use options for default repository flag
-    if (!datastores.length)
-      datastores.push(new Datastore({ Adapter: InMemoryAdapter }));
-
-    const datastore = _.first(datastores);
-    const defaultRepository = new Repository({ models, datastore });
-    Object.assign(this, { models: defaultRepository.models, datastores });
+    Object.assign(this, {
+      defaultRepository: this.createRepository(_.first(datastores)),
+    });
   }
 
-  createRepository() {
-    const { models, datastores } = this;
-    return new Repository({ models, datastores });
+  createRepository(store) {
+    const {
+      models,
+      datastores,
+      options: { defaultStore },
+    } = this;
+
+    if (!store) return new Repository({ models, store: defaultStore });
+    if (typeof store === 'string') {
+      // find store name in datastores
+      const datastore = datastores.find(s => s.name === store);
+      if (!datastore) throw new Error(`Could not find store '${store}'`);
+      return new Repository({ models, store: datastore });
+    }
+    return new Repository({ models, store });
   }
 
   // TODO: complete this
@@ -32,25 +49,17 @@ class Frontier {
   }
 
   addModel(Model) {
-    const repository = this;
-    if (this.models[Model.name])
+    if (this.models.find(M => M.name === Model.name))
       throw new Error(`Duplicate Model '${Model.name}'`);
-    // eslint-disable-next-line no-new
-    Model.validate(); // validate model
-    class RepositoryModel extends Model {}
-    RepositoryModel.prototype.repository = repository;
-    Object.defineProperty(RepositoryModel, 'name', {
-      value: `${Model.name}Repository`,
-    });
-
-    this.models[Model.name] = RepositoryModel;
+    this.models.push(Model);
+    this.defaultRepository.addModel(Model);
   }
 
   fromJSON(json, type) {
     const modelName = type || _.get(json, 'meta.type');
     if (!modelName)
       throw new TypeError('meta.type required to desearilise json objects');
-    const ModelType = this.models[modelName];
+    const ModelType = this.defaultRepository.models[modelName];
     if (!ModelType)
       throw new TypeError(`No model named '${modelName}' was found`);
     return new ModelType(json);

@@ -41,10 +41,10 @@ describe('Model References', () => {
     }
   }
 
-  const datastore = new Datastore({ Adapter: InMemoryAdapter });
+  const store = new Datastore({ Adapter: InMemoryAdapter });
   const repository = new Repository({
     models: [Account, User, MultiAccountUser, MixedRefModel],
-    datastore,
+    store,
   });
 
   it('should allow mixed references', () => {

@@ -14,13 +14,25 @@ class Datastore {
     if (!ModelDefinition)
       throw new Error('Datastore::find() called without a Model Definition');
 
-    // TODO: parse find query
+    // TODO: parse find query into more managable format
     const { values } = await this.adapter.find(
       ModelDefinition.name,
       query,
       options
     );
     return values.map(value => new ModelDefinition(value, options));
+  }
+
+  async count(ModelDefinition, query, options) {
+    if (!ModelDefinition)
+      throw new Error('Datastore::count() called without a Model Definition');
+
+    const count = await this.adapter.count(
+      ModelDefinition.name,
+      query,
+      options
+    );
+    return count;
   }
 
   async load(model) {
