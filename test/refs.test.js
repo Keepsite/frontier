@@ -1,7 +1,7 @@
 const { assert } = require('chai');
 const Frontier = require('../src');
 const Model = require('../src/Model');
-const CouchbaseAdapter = require('../src/adapters/CouchbaseAdapter');
+const InMemoryAdapter = require('../src/adapters/InMemoryAdapter');
 const Datastore = require('../src/Datastore');
 const Repository = require('../src/Repository');
 
@@ -42,7 +42,7 @@ describe('Model References', () => {
     }
   }
 
-  const store = new Datastore({ Adapter: CouchbaseAdapter });
+  const store = new Datastore({ Adapter: InMemoryAdapter });
   const repository = new Repository({
     models: [Account, User, MultiAccountUser, MixedRefModel],
     store,
