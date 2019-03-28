@@ -8,12 +8,12 @@ class InMemoryAdapter extends Adapter {
     Object.assign(this, { db: {} }, config);
   }
 
-  getModelKey(model) {
+  async getModelKey(model) {
     const keySeperator = this.keySeperator || '|';
     return `${model.modelName}${keySeperator}${model.id()}`;
   }
 
-  find(modelName, query /* options */) {
+  async find(modelName, query /* options */) {
     const typeValues = Object.values(this.db).filter(
       v => v.meta.type === modelName
     );
@@ -34,29 +34,29 @@ class InMemoryAdapter extends Adapter {
     );
   }
 
-  count(modelName, query, options) {
+  async count(modelName, query, options) {
     const results = this.find(modelName, query, options);
     return Object.values(results).length;
   }
 
-  flush() {
+  async flush() {
     this.db = {};
   }
 
-  load(model) {
+  async load(model) {
     const key = this.getModelKey(model);
     const value = this.db[key];
     if (!value) throw new Error(`record '${key}' missing`);
     return { cas: uuid.v4(), value };
   }
 
-  save(model) {
+  async save(model) {
     const key = this.getModelKey(model);
     this.db[key] = model.toJSON();
     return { cas: uuid.v4() };
   }
 
-  remove(model) {
+  async remove(model) {
     const key = this.getModelKey(model);
     delete this.db[key];
     return { cas: uuid.v4() };
