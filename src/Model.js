@@ -19,10 +19,6 @@ class Model {
     return '$id';
   }
 
-  static typeKey() {
-    return '$type';
-  }
-
   static validate() {
     const instance = new this();
     return !!instance;
@@ -92,7 +88,6 @@ class Model {
   constructor(data = {}, options) {
     const { repository } = Object.assign({}, options);
     const idKey = this.constructor.idKey();
-    const typeKey = this.constructor.typeKey();
 
     // this.modelName = this.constructor.name.replace(/Repository$/, '');
     this.modelName = this.constructor.name;
