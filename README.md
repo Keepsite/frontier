@@ -14,7 +14,8 @@
 Frontier is a simple, somewhat opinionated, Mongoose/Ottoman-inspired ODM.
 
 ```js
-const Frontier = require('./src');
+const Frontier = require('frontier');
+const Adapter = require('frontier/adapters/InMemoryAdapter');
 
 class Address extends Frontier.Model {
   static schema() {
@@ -39,7 +40,8 @@ class User extends Frontier.Model {
 }
 
 const frontier = new Frontier({ models: [Address, User] });
-const repo = frontier.createRepository();
+const store = new Frontier.Datastore({ Adapter });
+const repo = frontier.createRepository(store);
 
 (async () => {
   const user = new repo.models.User({
