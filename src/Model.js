@@ -1,4 +1,5 @@
 const _ = require('lodash');
+const util = require('util');
 const uuid = require('uuid');
 
 const Field = require('./Field');
@@ -190,6 +191,10 @@ class Model {
 
   loaded() {
     return _.has(this, '$.cas');
+  }
+
+  [util.inspect.custom]() {
+    return this.toJSON();
   }
 
   async save(options = {}) {
