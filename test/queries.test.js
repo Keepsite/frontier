@@ -339,7 +339,7 @@ describe('Model Queries', async () => {
       models: { User, Post },
     } = this.frontier.defaultRepository;
 
-    const creator = await User.find({ name: 'Sarah' });
+    const [creator] = await User.find({ name: 'Sarah' });
     const test1 = await Post.find({ creator });
     assert.equal(test1.length, 2);
 
