@@ -45,7 +45,7 @@ class Model {
     return model.load();
   }
 
-  static async find(query, options = {}) {
+  static async find(query = {}, options = {}) {
     const repository = options.repository || this.prototype.repository;
     if (!repository)
       throw new Error(`${this.name}::find() called without a repository`);
