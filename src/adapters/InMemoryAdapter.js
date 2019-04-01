@@ -100,7 +100,7 @@ class InMemoryAdapter extends Adapter {
     Object.assign(this, { db: {} }, config);
   }
 
-  async getModelKey(model) {
+  getModelKey(model) {
     const keySeperator = this.keySeperator || '|';
     return `${model.modelName}${keySeperator}${model.id()}`;
   }
