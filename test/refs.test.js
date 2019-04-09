@@ -187,5 +187,6 @@ describe('Model References', () => {
     assert.typeOf(multiUser.accounts, 'array');
     assert.equal(multiUser.accounts.length, 2);
     multiUser.accounts.forEach(a => assert.isFalse(a.loaded()));
+    multiUser.accounts.forEach(a => assert.isUndefined(a.email));
   });
 });

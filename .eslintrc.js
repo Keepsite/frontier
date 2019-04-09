@@ -1,15 +1,14 @@
 module.exports = {
-  "env": {
-    "node": true,
-    "mocha": true
+  env: {
+    node: true,
+    mocha: true,
   },
-  "rules": {
-    "no-param-reassign": 0,
-    "no-underscore-dangle": 0,
+  parserOptions: {
+    ecmaVersion: 9,
   },
-  extends: [
-    'eslint:recommended',
-    'airbnb/base',
-    'prettier',
-  ],
-}
+  rules: {
+    'no-param-reassign': 0,
+    'no-underscore-dangle': 0,
+  },
+  extends: ['eslint:recommended', 'airbnb/base', 'prettier'],
+};

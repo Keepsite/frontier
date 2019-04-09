@@ -142,7 +142,10 @@ class Field {
 
       const arrayType = this.getFieldType(this.definition[0]);
       if (arrayType.constructor === ModelRef)
-        return data.map(value => this.getModelInstance(value));
+        return data.map(value => {
+          if (Field.isModelType(value.constructor)) return value;
+          return this.getModelInstance(value);
+        });
       return data;
     }
 
@@ -185,6 +188,7 @@ class Field {
   getModelInstance(data) {
     const modelName =
       data.modelName || _.get(data, 'meta.type') || _.get(data, '$type');
+    // console.log({ modelName, data });
     if (!modelName)
       throw new Error(
         `Field::getModelInstance() data is not a model '${data}'`

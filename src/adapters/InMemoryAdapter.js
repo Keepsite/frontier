@@ -131,6 +131,8 @@ class InMemoryAdapter extends Adapter {
   }
 
   async load(model) {
+    if (!model)
+      throw new Error('InMemoryAdapter::load() called without a model ref');
     const key = this.getModelKey(model);
     const value = this.db[key];
     if (!value) throw new Error(`record '${key}' missing`);
@@ -139,7 +141,7 @@ class InMemoryAdapter extends Adapter {
 
   async save(model) {
     const key = this.getModelKey(model);
-    this.db[key] = model.toJSON();
+    this.db[key] = model.toJSON({ shallow: true });
     return { cas: uuid.v4() };
   }
 

@@ -174,8 +174,10 @@ class CouchbaseAdapter extends Adapter {
           expressions.push(`NOT (${booleanExpression.join(' OR ')})`);
         }
       } else if (value instanceof Model) {
-        const model = { $ref: value.id(), $type: value.constructor.type };
-        expressions.push(...this.buildFilterExpression(model, [...nodes]));
+        // const model = { $ref: value.id(), $type: value.constructor.type };
+        expressions.push(
+          ...this.buildFilterExpression(value.ref(), [...nodes])
+        );
       } else if (value instanceof Object) {
         expressions.push(...this.buildFilterExpression(value, [...nodes, key]));
       } else if (typeof value === 'number' || typeof value === 'boolean') {

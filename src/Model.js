@@ -115,8 +115,7 @@ class Model {
         [name]: new Field({
           name,
           definition,
-          value:
-            name === idKey ? data.$ref || data.id || data[idKey] : data[name],
+          value: name === idKey ? this.id(data) : data[name],
         }),
       }),
       {}
@@ -138,9 +137,14 @@ class Model {
     });
   }
 
-  id() {
+  id(data) {
     const idKey = this.constructor.idKey();
+    if (data) return data.$ref || data[idKey] || data.id;
     return this[idKey];
+  }
+
+  ref() {
+    return { $ref: this.id(), $type: this.modelName };
   }
 
   toJSON(options = {}) {
@@ -154,12 +158,16 @@ class Model {
           if (value.constructor === Array) {
             return {
               ...result,
-              [name]: value.map(v => (typeof v === 'object' ? v.toJSON() : v)),
+              [name]: value.map(v => {
+                if (typeof v === 'object')
+                  return v instanceof Model ? v.ref() : v.toJSON(options);
+                return v;
+              }),
             };
           }
           if (typeof value === 'object') {
             if (value.constructor === Date)
-              return { ...result, [name]: value.toJSON() };
+              return { ...result, [name]: value.toJSON(options) };
             if (
               field.type === 'Mixed' ||
               field.type.constructor === Field.ModelRef
@@ -168,13 +176,9 @@ class Model {
                 Field.isModelRef(field.type) &&
                 (!value.loaded() || shallow)
               ) {
-                const ref = {
-                  $ref: value.id(),
-                  $type: value.modelName,
-                };
-                return { ...result, [name]: ref };
+                return { ...result, [name]: value.ref() };
               }
-              return { ...result, [name]: value.toJSON() };
+              return { ...result, [name]: value.toJSON(options) };
             }
           }
         }
@@ -206,11 +210,13 @@ class Model {
     let paths = [];
     let options = {};
     if (args[0]) {
+      let optionsArg;
       if (args[0].constructor === Object) {
-        [options] = args;
+        [optionsArg] = args;
       } else {
-        [paths, options] = args;
+        [paths, optionsArg] = args;
       }
+      if (optionsArg) options = optionsArg;
     }
 
     await this.preLoad();

@@ -49,13 +49,46 @@ class Datastore {
     // });
     if (!model) throw new Error('Datastore::load() called without a model');
     if (!model.loaded()) {
-      // TODO: may be able to replace this with path '.'
       const { value, ...$ } = await this.adapter.load(model);
       Object.assign(model, value, { $ });
     }
     await Promise.all(
       paths.map(path => {
+        const [childPath, ...deepPath] = path.split('.');
+        const {
+          groups: { arrayPath },
+        } = childPath.match(/(?<arrayPath>.*)\[\*\]$/) || { groups: {} };
+
+        if (arrayPath) {
+          const arrayField = model[arrayPath];
+          if (!arrayField)
+            throw new Error(
+              `Could not find array path '${arrayPath}[*]' to load on model ${
+                model.modelName
+              }`
+            );
+          return Promise.all(
+            arrayField.map(field =>
+              field
+                .load()
+                .then(loadedField => loadedField.load(deepPath.join('.')))
+                .then(() => model)
+            )
+          );
+        }
+
+        if (deepPath.length)
+          return model[childPath]
+            .load()
+            .then(loadedField => loadedField.load(deepPath.join('.')))
+            .then(() => model);
+
+        // load direct descendent
         const modelField = model[path];
+        if (!modelField)
+          throw new Error(
+            `Could not find path '${path}' to load on model ${model.modelName}`
+          );
         return this.adapter
           .load(modelField)
           .then(({ value, ...$ }) => Object.assign(modelField, value, { $ }));

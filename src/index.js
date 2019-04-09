@@ -49,11 +49,11 @@ class Frontier {
     });
   }
 
-  addModel(Model) {
-    if (this.models.find(M => M.name === Model.name))
-      throw new Error(`Duplicate Model '${Model.name}'`);
-    this.models.push(Model);
-    this.defaultRepository.addModel(Model);
+  addModel(NewModel) {
+    if (this.models.find(M => M.name === NewModel.name))
+      throw new Error(`Duplicate NewModel '${NewModel.name}'`);
+    this.models.push(NewModel);
+    this.defaultRepository.addNewModel(NewModel);
   }
 
   fromJSON(json, type) {
