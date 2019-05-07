@@ -1,5 +1,20 @@
 const _ = require('lodash');
+const {
+  GraphQLSchema,
+  GraphQLBoolean,
+  GraphQLID,
+  GraphQLInt,
+  GraphQLFloat,
+  GraphQLList,
+  GraphQLString,
+  GraphQLNonNull,
+  GraphQLObjectType,
+  GraphQLUnionType,
+  GraphQLInterfaceType,
+} = require('graphql');
+
 const Model = require('./Model');
+const Field = require('./Field');
 const Datastore = require('./Datastore');
 const Repository = require('./Repository');
 const InMemoryAdapter = require('./adapters/InMemoryAdapter');
@@ -53,7 +68,40 @@ class Frontier {
     if (this.models.find(M => M.name === NewModel.name))
       throw new Error(`Duplicate NewModel '${NewModel.name}'`);
     this.models.push(NewModel);
-    this.defaultRepository.addNewModel(NewModel);
+    this.defaultRepository.addModel(NewModel);
+  }
+
+  makeGraphQLSchema(args = {}) {
+    const { queries, mutations } = args;
+    const { models } = this;
+    const query = new GraphQLObjectType({
+      name: 'Query',
+      fields: models.reduce(
+        (fields, model) => ({
+          ...fields,
+          [model.name]: {
+            type: new GraphQLObjectType({
+              name: model.name,
+              fields: _.reduce(
+                model.schema(),
+                (modelFields, modelField, modelName) => ({
+                  ...modelFields,
+                  [modelName]: { type: GraphQLString },
+                }),
+                {}
+              ),
+            }),
+            args: { id: { type: GraphQLID } },
+            resolve: (parent, { id }, context = {}) => {
+              const repository = context.repository || this.defaultRepository;
+              return repository.models[model.name].getById(id);
+            },
+          },
+        }),
+        {}
+      ),
+    });
+    return new GraphQLSchema({ query });
   }
 
   fromJSON(json, type) {
@@ -68,6 +116,7 @@ class Frontier {
 }
 
 Frontier.Model = Model;
+Frontier.Field = Field;
 Frontier.Datastore = Datastore;
 Frontier.Repository = Repository;
 module.exports = Frontier;

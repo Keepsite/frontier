@@ -80,7 +80,7 @@ const repo = frontier.createRepository(store);
 - Data Navigator Network Diagram
   - [cytoscape](http://js.cytoscape.org/)
   - [visjs](http://visjs.org/network_examples.html)
-  - [Other JS Modeling Libraries](https://modeling-languages.com/javascript-drawing-libraries-diagrams/)
+  - [Other JS Diagram Libraries](https://modeling-languages.com/javascript-drawing-libraries-diagrams/)
 - On demand graph loading with proxies
   - [similar to](https://github.com/eiriklv/json-populate/blob/master/populate-by-reference.js)
 - Improved validation onLoad and onSave using https://github.com/chriso/validator.js
