@@ -15,10 +15,24 @@ class Repository {
     models.forEach(M => this.addModel(M));
   }
 
+  hasInterface(model = this.constructor) {
+    const prototype = Object.getPrototypeOf(model);
+    if (prototype.name === 'Interface') {
+      // Interfaces themselves should return false
+      if (model === this.constructor) return false;
+      return true;
+    }
+    if (typeof prototype === 'function') return this.hasInterface(prototype);
+    return false;
+  }
+
   addModel(Model) {
     const repository = this;
     if (this.models[Model.name])
       throw new Error(`Duplicate Model '${Model.name}'`);
+    if (Model.isInterface()) {
+      throw new Error(`Attempted to use Interface '${Model.name}' as Model`);
+    }
     // eslint-disable-next-line no-new
     Model.validate();
     class RepositoryModel extends Model {}
@@ -58,7 +72,6 @@ class Repository {
   }
 
   async load(modelInstance, paths) {
-    // console.log('Repository::load()');
     // TODO: inspect the cache
     await this.store.load(modelInstance, paths);
     return modelInstance;

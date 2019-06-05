@@ -1,6 +1,7 @@
 const _ = require('lodash');
 const util = require('util');
 const uuid = require('uuid');
+const { GraphQLObjectType } = require('graphql');
 
 const Field = require('./Field');
 
@@ -26,6 +27,14 @@ class Model {
 
   static ref(id, options) {
     return new this({ id }, { ...options });
+  }
+
+  static hasInterface() {
+    return false;
+  }
+
+  static isInterface() {
+    return false;
   }
 
   static async create(data = {}, options = {}) {
@@ -85,6 +94,23 @@ class Model {
     return models;
   }
 
+  static GraphQLType() {
+    if (this._gqlType) return this._gqlType;
+    const modelInstance = new this();
+
+    this._gqlType = new GraphQLObjectType({
+      name: this.name,
+      interfaces: () => {
+        if (this.hasInterface())
+          return [Object.getPrototypeOf(this).GraphQLType()];
+        return [];
+      },
+      fields: modelInstance.getGqlFields(),
+    });
+
+    return this._gqlType;
+  }
+
   constructor(data = {}, options) {
     const { repository } = Object.assign({}, options);
     const idKey = this.constructor.idKey();
@@ -92,6 +118,7 @@ class Model {
     // this.modelName = this.constructor.name.replace(/Repository$/, '');
     this.modelName = this.constructor.name;
     this.schema = this.constructor.schema();
+
     if (repository) this.repository = repository;
     if (!this.schema)
       throw new Error(`Model '${this.modelName}' is missing a schema object`);
@@ -145,6 +172,33 @@ class Model {
 
   ref() {
     return { $ref: this.id(), $type: this.modelName };
+  }
+
+  getGqlFields() {
+    return _.reduce(
+      this.fields,
+      (modelFields, modelField) => {
+        // TODO: remove this when $id idKey issue is fixed
+        const fieldName = modelField.name.replace('$', '');
+        return {
+          ...modelFields,
+          [fieldName]: {
+            type: modelField.GraphQLType(),
+            resolve: async parent => {
+              if (fieldName === 'id') return parent.id();
+              const fieldModel = parent[fieldName];
+              if (fieldModel instanceof Model && !fieldModel.loaded())
+                await fieldModel.load();
+              if (modelField.type instanceof Field.List) {
+                await parent.load(`${fieldName}[*]`);
+              }
+              return fieldModel;
+            },
+          },
+        };
+      },
+      {}
+    );
   }
 
   toJSON(options = {}) {

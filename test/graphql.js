@@ -1,11 +1,34 @@
 const { assert } = require('chai');
 const { graphql } = require('graphql');
+const {
+  GraphQLBoolean,
+  GraphQLID,
+  GraphQLInt,
+  GraphQLFloat,
+  GraphQLList,
+  GraphQLString,
+  GraphQLObjectType,
+  GraphQLSchema,
+} = require('graphql');
+const { GraphQLJSON } = require('graphql-type-json');
 
 const Frontier = require('../src');
 const Model = require('../src/Model');
+const Interface = require('../src/Interface');
 
-describe('GraphQL Schema Generator', () => {
-  class Account extends Model {
+// This mocks graphql-tag allowing us to use babel-sublime gql`` syntax highlighting
+const gql = ([query]) => query;
+
+describe.only('GraphQL Types', () => {
+  class Record extends Interface {
+    static schema() {
+      return {
+        name: 'string',
+      };
+    }
+  }
+
+  class Account extends Record {
     static schema() {
       return {
         email: 'string',
@@ -14,25 +37,408 @@ describe('GraphQL Schema Generator', () => {
     }
   }
 
-  class User extends Model {
+  class User extends Record {
     static schema() {
       return {
+        name: 'string',
         username: 'string',
         account: { ref: Account },
       };
     }
   }
 
-  const models = [Account, User];
-  const frontier = new Frontier({ models });
-  frontier.defaultRepository.models.User.create({ id: 1, username: 'user1' });
+  class Org extends Record {
+    static schema() {
+      return {
+        name: 'string',
+        users: [{ ref: User }],
+      };
+    }
+  }
 
-  it('should generate valid basic graphql query schema', async () => {
-    const schema = frontier.makeGraphQLSchema();
-    const query = `{ User(id: 1 ) { username } }`;
-    const { data, errors } = await graphql(schema, query);
+  class Notification extends Model {
+    static schema() {
+      return {
+        message: { type: 'string' },
+        recipients: [
+          {
+            ref: 'Mixed',
+            unionName: 'Recipients',
+            typeRange: [Org, User],
+          },
+        ],
+      };
+    }
+  }
+
+  class Activity extends Model {
+    static schema() {
+      return {
+        message: { type: 'string' },
+        record: { ref: Record },
+      };
+    }
+  }
+
+  it('should generate graphql type from a basic Model', async () => {
+    const gqlType = Account.GraphQLType();
+
+    assert.isOk(gqlType);
+    assert.isTrue(gqlType instanceof GraphQLObjectType);
+    const { id, email, name } = gqlType.getFields();
+
+    assert.equal(id.type, GraphQLID);
+    assert.equal(email.type, GraphQLString);
+    assert.equal(name.type, GraphQLString);
+  });
+
+  it('should generate graphql type with multiple primitive types', async () => {
+    class PrimitiveTypes extends Model {
+      static schema() {
+        return {
+          str: 'string',
+          num: 'number',
+          int: 'integer',
+          bool: 'boolean',
+        };
+      }
+    }
+    const gqlType = PrimitiveTypes.GraphQLType();
+
+    assert.isOk(gqlType);
+    assert.isTrue(gqlType instanceof GraphQLObjectType);
+    const { id, str, num, int, bool } = gqlType.getFields();
+    assert.equal(id.type, GraphQLID);
+    assert.equal(str.type, GraphQLString);
+    assert.equal(num.type, GraphQLFloat);
+    assert.equal(int.type, GraphQLInt);
+    assert.equal(bool.type, GraphQLBoolean);
+  });
+
+  it('should generate graphql type with Mixed field', async () => {
+    class MixedType extends Model {
+      static schema() {
+        return {
+          mixed: { type: 'Mixed' },
+        };
+      }
+    }
+    const gqlType = MixedType.GraphQLType();
+
+    assert.isOk(gqlType);
+    assert.isTrue(gqlType instanceof GraphQLObjectType);
+    const { id, mixed } = gqlType.getFields();
+
+    assert.equal(id.type, GraphQLID);
+    assert.equal(mixed.type, GraphQLJSON);
+  });
+
+  it('should generate graphql type with Object field', async () => {
+    class MixedType extends Model {
+      static schema() {
+        return {
+          object: {
+            str: 'string',
+            num: 'number',
+            int: 'integer',
+            bool: 'boolean',
+          },
+        };
+      }
+    }
+    const gqlType = MixedType.GraphQLType();
+
+    assert.isOk(gqlType);
+    assert.isTrue(gqlType instanceof GraphQLObjectType);
+    const { id, object } = gqlType.getFields();
+
+    assert.equal(id.type, GraphQLID);
+    assert.equal(object.type, GraphQLJSON);
+  });
+
+  it('should generate graphql type with ModelRef field', async () => {
+    const gqlType = User.GraphQLType();
+
+    assert.isOk(gqlType);
+    assert.isTrue(gqlType instanceof GraphQLObjectType);
+    const { id, username, account } = gqlType.getFields();
+
+    assert.equal(id.type, GraphQLID);
+    assert.equal(username.type, GraphQLString);
+    assert.equal(String(account.type), String(Account.GraphQLType()));
+  });
+
+  it('should generate graphql type with primitive Lists', async () => {
+    class PrimitiveLists extends Model {
+      static schema() {
+        return {
+          strList: ['string'],
+          numList: ['number'],
+          intList: ['integer'],
+          boolList: ['boolean'],
+        };
+      }
+    }
+
+    const gqlType = PrimitiveLists.GraphQLType();
+
+    assert.isOk(gqlType);
+    assert.isTrue(gqlType instanceof GraphQLObjectType);
+    const { id, strList, numList, intList, boolList } = gqlType.getFields();
+
+    assert.equal(id.type, GraphQLID);
+    assert.equal(String(strList.type), String(GraphQLList(GraphQLString)));
+    assert.equal(String(numList.type), String(GraphQLList(GraphQLFloat)));
+    assert.equal(String(intList.type), String(GraphQLList(GraphQLInt)));
+    assert.equal(String(boolList.type), String(GraphQLList(GraphQLBoolean)));
+  });
+
+  it('should generate graphql type with a ModelRef List', async () => {
+    const gqlType = Org.GraphQLType();
+
+    assert.isOk(gqlType);
+    assert.isTrue(gqlType instanceof GraphQLObjectType);
+    const { id, name, users } = gqlType.getFields();
+
+    assert.equal(id.type, GraphQLID);
+    assert.equal(String(name.type), GraphQLString);
+    assert.equal(String(users.type), String(GraphQLList(User.GraphQLType())));
+  });
+
+  it('should support basic types for basic graphql schema', async () => {
+    const schema = new GraphQLSchema({
+      query: new GraphQLObjectType({
+        name: 'Query',
+        fields: {
+          user: {
+            type: User.GraphQLType(),
+            args: { id: { type: GraphQLID } },
+            resolve: (parent, { id }, context = {}) => {
+              const {
+                models: { User: RepositoryUser },
+              } = context;
+              return RepositoryUser.getById(id);
+            },
+          },
+        },
+      }),
+    });
+    const frontier = new Frontier({ models: [Account, User, Org] });
+    const { models } = frontier.defaultRepository;
+    await models.User.create({ id: 1, username: 'user1' });
+
+    const query = gql`
+      {
+        user(id: 1) {
+          username
+        }
+      }
+    `;
+    const context = { models };
+    const { data, errors } = await graphql(schema, query, {}, context);
 
     assert.isUndefined(errors);
-    assert.include(data.User, { username: 'user1' });
+    assert.include(data.user, { username: 'user1' });
+  });
+
+  it('should support ModelRef types for graphql schema', async () => {
+    const schema = new GraphQLSchema({
+      query: new GraphQLObjectType({
+        name: 'Query',
+        fields: {
+          user: {
+            type: User.GraphQLType(),
+            args: { id: { type: GraphQLID } },
+            resolve: (parent, { id }, { models }) => models.User.getById(id),
+          },
+        },
+      }),
+    });
+    const frontier = new Frontier({ models: [Account, User, Org] });
+    const { models } = frontier.defaultRepository;
+    const account = await models.Account.create({
+      id: 1,
+      email: 'me@home.com',
+      name: 'Work',
+    });
+    await models.User.create({ id: 2, username: 'user1', account });
+    const query = gql`
+      {
+        user(id: 2) {
+          username
+          account {
+            email
+            name
+          }
+        }
+      }
+    `;
+    const context = { models };
+    const { data, errors } = await graphql(schema, query, {}, context);
+
+    assert.isUndefined(errors);
+    assert.include(data.user, { username: 'user1' });
+    assert.include(data.user.account, { email: 'me@home.com' });
+  });
+
+  it('should support Model List types for graphql schema', async () => {
+    const schema = new GraphQLSchema({
+      query: new GraphQLObjectType({
+        name: 'Query',
+        fields: {
+          org: {
+            type: Org.GraphQLType(),
+            args: { id: { type: GraphQLID } },
+            resolve: (parent, { id }, { models }) => models.Org.getById(id),
+          },
+        },
+      }),
+    });
+
+    const frontier = new Frontier({ models: [Account, User, Org] });
+    const { models } = frontier.defaultRepository;
+    const user1 = await models.User.create({ id: 1, username: 'user1' });
+    const user2 = await models.User.create({ id: 2, username: 'user2' });
+    await models.Org.create({ id: 3, name: 'org1', users: [user1, user2] });
+
+    const query = gql`
+      {
+        org(id: 3) {
+          id
+          name
+          users {
+            id
+            username
+          }
+        }
+      }
+    `;
+    const context = { models };
+    const { data, errors } = await graphql(schema, query, {}, context);
+
+    assert.isUndefined(errors);
+    assert.include(data.org, { id: '3' });
+    assert.include(data.org, { name: 'org1' });
+    assert.deepInclude(data.org.users, { id: '2', username: 'user2' });
+  });
+
+  it('should support Union types for graphql schema', async () => {
+    const schema = new GraphQLSchema({
+      query: new GraphQLObjectType({
+        name: 'Query',
+        fields: {
+          notification: {
+            type: Notification.GraphQLType(),
+            args: { id: { type: GraphQLID } },
+            resolve: (parent, { id }, { models }) =>
+              models.Notification.getById(id),
+          },
+        },
+      }),
+    });
+
+    const frontier = new Frontier({
+      models: [Account, User, Org, Notification],
+    });
+    const { models } = frontier.defaultRepository;
+    const user = await models.User.create({ id: 1, username: 'user1' });
+    const org = await models.Org.create({
+      id: 2,
+      name: 'org1',
+      users: [user],
+    });
+    await models.Notification.create({
+      id: 3,
+      message: 'test',
+      recipients: [org, user],
+    });
+
+    const query = gql`
+      {
+        notification(id: 3) {
+          id
+          message
+          recipients {
+            ... on User {
+              id
+              username
+            }
+            ... on Org {
+              id
+              name
+            }
+          }
+        }
+      }
+    `;
+    const context = { models };
+    const { data, errors } = await graphql(schema, query, {}, context);
+
+    assert.isUndefined(errors);
+    assert.include(data.notification, { id: '3' });
+    assert.include(data.notification, { message: 'test' });
+    assert.deepInclude(data.notification.recipients, {
+      id: '1',
+      username: 'user1',
+    });
+  });
+
+  it('should support Interface types for graphql schema', async () => {
+    const schema = new GraphQLSchema({
+      query: new GraphQLObjectType({
+        name: 'Query',
+        fields: {
+          activity: {
+            type: Activity.GraphQLType(),
+            args: { id: { type: GraphQLID } },
+            resolve: (parent, { id }, { models }) =>
+              models.Activity.getById(id),
+          },
+          user: {
+            type: User.GraphQLType(),
+            args: { id: { type: GraphQLID } },
+            resolve: (parent, { id }, { models }) => models.User.getById(id),
+          },
+        },
+      }),
+    });
+
+    const frontier = new Frontier({
+      models: [Account, User, Org, Activity],
+    });
+    const { models } = frontier.defaultRepository;
+    const user = await models.User.create({
+      id: 1,
+      username: 'user1',
+      name: 'user1',
+    });
+    await models.Activity.create({
+      id: 2,
+      message: 'test',
+      record: user,
+    });
+
+    const query = gql`
+      {
+        activity(id: 2) {
+          id
+          message
+          record {
+            id
+            name
+          }
+        }
+      }
+    `;
+    const context = { models };
+    const { data, errors } = await graphql(schema, query, {}, context);
+
+    assert.isUndefined(errors);
+    assert.include(data.activity, { id: '2' });
+    assert.include(data.activity, { message: 'test' });
+    assert.include(data.activity.record, {
+      id: '1',
+      name: 'user1',
+    });
   });
 });

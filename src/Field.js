@@ -1,12 +1,16 @@
+/* eslint-disable no-use-before-define */
 const _ = require('lodash');
+const {
+  GraphQLBoolean,
+  GraphQLID,
+  GraphQLInt,
+  GraphQLFloat,
+  GraphQLList,
+  GraphQLString,
+  GraphQLUnionType,
+} = require('graphql');
+const { GraphQLJSON } = require('graphql-type-json');
 
-class ModelRef {
-  constructor(type) {
-    Object.assign(this, { type });
-  }
-}
-
-// A Field takes a field definition object
 class Field {
   static getModelType(definition) {
     if (typeof definition.type === 'function') {
@@ -17,7 +21,10 @@ class Field {
   }
 
   static isModelType(type) {
-    return Object.getPrototypeOf(type).name === 'Model';
+    const prototype = Object.getPrototypeOf(type);
+    if (prototype.name === 'Model') return true;
+    if (typeof prototype === 'function') return Field.isModelType(prototype);
+    return false;
   }
 
   static isModelRef(type) {
@@ -27,11 +34,19 @@ class Field {
     return false;
   }
 
+  static isList(type) {
+    if (type.constructor === List) {
+      return Field.isValidType(type.type);
+    }
+    return false;
+  }
+
   static isValidType(type) {
     const coreTypes = ['string', 'number', 'integer', 'boolean'];
     if (Field.isModelType(type)) return true;
     if (Field.isModelRef(type)) return true;
-    return [...coreTypes, 'array', 'object', 'Mixed', 'Date'].includes(type);
+    if (Field.isList(type)) return true;
+    return [...coreTypes, 'object', 'Mixed', 'Date'].includes(type);
   }
 
   constructor({ name, definition, value }) {
@@ -71,8 +86,42 @@ class Field {
     });
   }
 
+  GraphQLType() {
+    const typeMap = {
+      string: GraphQLString,
+      number: GraphQLFloat,
+      integer: GraphQLInt,
+      boolean: GraphQLBoolean,
+    };
+
+    const fieldType = this.getFieldType(this.definition);
+    // TODO: replace this with a Frontier ID type
+    if (this.name === '$id') return GraphQLID;
+    if (fieldType instanceof ModelRef) {
+      if (fieldType.type === 'Mixed') {
+        const { unionName, typeRange } = this.definition;
+        if (!unionName)
+          throw new TypeError(
+            `Unknown Mixed ModelRef type for field '${
+              this.name
+            }'. It may be missing a 'unionName' property in the model definition.`
+          );
+        return new GraphQLUnionType({
+          name: unionName,
+          types: typeRange.map(model => model.GraphQLType()),
+          resolveType: obj => obj.constructor.GraphQLType(),
+        });
+      }
+      return fieldType.type.GraphQLType();
+    }
+    if (fieldType instanceof List) return fieldType.GraphQLType();
+    if (['Mixed', 'object'].includes(fieldType)) return GraphQLJSON;
+    if (!Object.keys(typeMap).includes(fieldType))
+      throw new TypeError(`Missing GraphQL type for '${fieldType}'`);
+    return typeMap[this.type];
+  }
+
   validate() {
-    // console.log('Field::validate()', { name: this.name, value: this.value });
     if (this.validator) this.validator(this.value);
     if (this.type === 'object') {
       Object.values(this.value).forEach(f => {
@@ -101,19 +150,13 @@ class Field {
         throw new TypeError(
           `Array Field '${name}' has an invalid type '${arrayType}'`
         );
-      return 'array';
+      return new List({ name, definition: definition[0] });
     }
     return definition;
   }
 
   getValue(data = this.value) {
-    // console.log(`Field(${this.name})::getValue()`);
     if (!data && data !== false) return this.defaultValue();
-    // console.log({
-    //   name: this.name,
-    //   definition: this.definition,
-    //   modelRef: Field.isModelRef(this.type),
-    // });
 
     // Get Value of Nested and Reference models
     if (Field.isModelRef(this.type)) {
@@ -136,7 +179,7 @@ class Field {
 
     if (coreTypes[this.type]) return coreTypes[this.type](data);
 
-    if (this.type === 'array') {
+    if (this.type instanceof List) {
       if (data.constructor !== Array)
         throw new TypeError(`invalid value for array type '${data}'`);
 
@@ -188,7 +231,7 @@ class Field {
   getModelInstance(data) {
     const modelName =
       data.modelName || _.get(data, 'meta.type') || _.get(data, '$type');
-    // console.log({ modelName, data });
+
     if (!modelName)
       throw new Error(
         `Field::getModelInstance() data is not a model '${data}'`
@@ -218,12 +261,28 @@ class Field {
       object: {},
     };
 
-    if (['array', 'object'].includes(field.type))
-      return this.getValue(defaults[field.type]);
+    if (field.type === 'object') return this.getValue(defaults[field.type]);
     if (field.required) return defaults[field.type];
     return undefined;
   }
 }
 
+class ModelRef {
+  constructor(type) {
+    Object.assign(this, { type });
+  }
+}
+
+class List extends Field {
+  constructor({ name, definition, value }) {
+    super({ name, definition, value });
+  }
+
+  GraphQLType() {
+    return new GraphQLList(super.GraphQLType());
+  }
+}
+
+Field.List = List;
 Field.ModelRef = ModelRef;
 module.exports = Field;

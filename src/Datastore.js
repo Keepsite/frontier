@@ -41,12 +41,6 @@ class Datastore {
   }
 
   async load(model, paths = []) {
-    // console.log('Datastore::load()', {
-    //   modelName: model.modelName,
-    //   id: model.id(),
-    //   paths,
-    //   loaded: model.loaded(),
-    // });
     if (!model) throw new Error('Datastore::load() called without a model');
     if (!model.loaded()) {
       const { value, ...$ } = await this.adapter.load(model);
