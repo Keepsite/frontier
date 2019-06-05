@@ -1,6 +1,6 @@
 {
   "name": "Frontier",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "A Universal ODM for NodeJS",
   "main": "src/index.js",
   "license": "MIT",
@@ -8,25 +8,25 @@
   "scripts": {
     "lint": "eslint ./",
     "test": "mocha",
-    "coverage": "nyc --reporter html mocha"
+    "coverage": "nyc mocha"
   },
   "dependencies": {
-    "couchbase": "^2.6.2",
-    "eslint-plugin-jsx-a11y": "^6.1.2",
-    "graphql": "^14.2.1",
+    "couchbase": "^2.6.4",
+    "graphql": "^14.3.1",
     "graphql-type-json": "^0.3.0",
-    "lodash": "^4.17.4",
+    "lodash": "^4.17.11",
     "uuid": "^3.3.2"
   },
   "devDependencies": {
-    "chai": "^4.1.2",
-    "eslint": "^4.19.1",
-    "eslint-config-airbnb": "^16.1.0",
-    "eslint-config-prettier": "^2.9.0",
-    "eslint-plugin-import": "^2.8.0",
-    "eslint-plugin-react": "^7.9.1",
-    "istanbul": "^0.4.5",
-    "mocha": "^4.0.1",
-    "prettier": "^1.16.1"
+    "chai": "^4.2.0",
+    "eslint": "^5.16.0",
+    "eslint-config-airbnb": "^17.1.0",
+    "eslint-config-prettier": "^4.3.0",
+    "eslint-plugin-import": "^2.17.3",
+    "eslint-plugin-jsx-a11y": "^6.2.1",
+    "eslint-plugin-react": "^7.13.0",
+    "mocha": "^6.1.4",
+    "nyc": "^14.1.1",
+    "prettier": "^1.17.1"
   }
 }

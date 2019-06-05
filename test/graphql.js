@@ -19,7 +19,7 @@ const Interface = require('../src/Interface');
 // This mocks graphql-tag allowing us to use babel-sublime gql`` syntax highlighting
 const gql = ([query]) => query;
 
-describe.only('GraphQL Types', () => {
+describe('GraphQL Types', () => {
   class Record extends Interface {
     static schema() {
       return {

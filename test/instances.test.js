@@ -25,6 +25,7 @@ describe('Model Instances', () => {
     static idKey() {
       return 'myId';
     }
+
     static schema() {
       return {
         myId: { type: 'string', default: uuid, readonly: true },
