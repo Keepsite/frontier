@@ -65,6 +65,7 @@ const repo = frontier.createRepository(store);
 
 - ES6 Classes for Models
 - ES6 Async/Await support
+- Generate GraphQL types and default resolvers
 - Pass through cache for repositories (Dataloader)
 - Model Metadata (e.g. meta.demoId)
   <br/><br/>
@@ -73,7 +74,6 @@ const repo = frontier.createRepository(store);
 
 - Chainable API
 - Model Version Migrations
-- Generate GraphQL types and default resolvers
 - Fake Generator for Models `Model.Fake({ args })`
 - Adapter Performance Testing
 - Model Network Diagram (GraphQLVoyager)
