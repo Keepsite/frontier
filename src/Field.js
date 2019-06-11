@@ -9,6 +9,7 @@ const {
   GraphQLString,
   GraphQLUnionType,
 } = require('graphql');
+const GraphQLDate = require('graphql-date');
 const { GraphQLJSON } = require('graphql-type-json');
 
 class Field {
@@ -29,7 +30,10 @@ class Field {
 
   static isModelRef(type) {
     if (type.constructor === ModelRef) {
-      return type.type === 'Mixed' || Field.isModelType(type.type);
+      if (typeof type.type === 'string') {
+        return type.type === 'Mixed';
+      }
+      return true;
     }
     return false;
   }
@@ -41,12 +45,25 @@ class Field {
     return false;
   }
 
+  static isCoreType(type) {
+    const coreTypes = [
+      'string',
+      'number',
+      'integer',
+      'boolean',
+      'object',
+      'Mixed',
+      'Date',
+    ];
+    return coreTypes.includes(type);
+  }
+
   static isValidType(type) {
-    const coreTypes = ['string', 'number', 'integer', 'boolean'];
     if (Field.isModelType(type)) return true;
     if (Field.isModelRef(type)) return true;
     if (Field.isList(type)) return true;
-    return [...coreTypes, 'object', 'Mixed', 'Date'].includes(type);
+    if (Field.isCoreType(type)) return true;
+    return false;
   }
 
   constructor({ name, definition, value }) {
@@ -67,6 +84,7 @@ class Field {
       );
 
     this.value = this.getValue(value);
+
     this.validate();
     if (!this.type || !Field.isValidType(this.type))
       throw new TypeError(
@@ -86,17 +104,19 @@ class Field {
     });
   }
 
-  GraphQLType() {
+  graphQLType() {
     const typeMap = {
       string: GraphQLString,
       number: GraphQLFloat,
       integer: GraphQLInt,
       boolean: GraphQLBoolean,
+      Date: GraphQLDate,
     };
 
     const fieldType = this.getFieldType(this.definition);
     // TODO: replace this with a Frontier ID type
     if (this.name === '$id') return GraphQLID;
+    if (Field.isModelType(fieldType)) return fieldType.graphQLType();
     if (fieldType instanceof ModelRef) {
       if (fieldType.type === 'Mixed') {
         const { unionName, typeRange } = this.definition;
@@ -108,13 +128,16 @@ class Field {
           );
         return new GraphQLUnionType({
           name: unionName,
-          types: typeRange.map(model => model.GraphQLType()),
-          resolveType: obj => obj.constructor.GraphQLType(),
+          types: typeRange.map(model => model.graphQLType()),
+          resolveType: obj => obj.constructor.graphQLType(),
         });
       }
-      return fieldType.type.GraphQLType();
+      if (fieldType.type.graphQLType) return fieldType.type.graphQLType();
+      throw new Error(
+        `Cannot get GraphQLType for Field: '${this.name} ${fieldType}'`
+      );
     }
-    if (fieldType instanceof List) return fieldType.GraphQLType();
+    if (fieldType instanceof List) return fieldType.graphQLType();
     if (['Mixed', 'object'].includes(fieldType)) return GraphQLJSON;
     if (!Object.keys(typeMap).includes(fieldType))
       throw new TypeError(`Missing GraphQL type for '${fieldType}'`);
@@ -122,7 +145,7 @@ class Field {
   }
 
   validate() {
-    if (this.validator) this.validator(this.value);
+    if (this.validator && this.value) this.validator(this.value);
     if (this.type === 'object') {
       Object.values(this.value).forEach(f => {
         if (f && f.constructor === Field) f.validate();
@@ -133,7 +156,7 @@ class Field {
   getFieldType(definition) {
     const { name } = this;
     if (definition.constructor === Object) {
-      if (definition.ref) return new ModelRef(definition.ref);
+      if (definition.ref) return new ModelRef(definition);
       if (!definition.type || definition.type.type !== undefined)
         return 'object';
       const modelType = Field.getModelType(definition);
@@ -268,8 +291,16 @@ class Field {
 }
 
 class ModelRef {
-  constructor(type) {
-    Object.assign(this, { type });
+  constructor({ ref }) {
+    if (ref.prototype === undefined && typeof ref === 'function') {
+      Object.assign(this, { type: ref() });
+    } else {
+      Object.assign(this, { type: ref });
+    }
+  }
+
+  toString() {
+    return `ModelRef(type: ${JSON.stringify(this.type)})`;
   }
 }
 
@@ -278,8 +309,8 @@ class List extends Field {
     super({ name, definition, value });
   }
 
-  GraphQLType() {
-    return new GraphQLList(super.GraphQLType());
+  graphQLType() {
+    return new GraphQLList(super.graphQLType());
   }
 }
 

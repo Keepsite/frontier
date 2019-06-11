@@ -86,67 +86,108 @@ class Model {
       );
     await Promise.all(
       models.map(async m => {
-        await m.preLoad();
+        await m.preLoad(m);
         await repo.load(m);
-        await m.postLoad();
+        await m.postLoad(m);
       })
     );
     return models;
   }
 
-  static GraphQLType() {
-    if (this._gqlType) return this._gqlType;
-    const modelInstance = new this();
-
-    this._gqlType = new GraphQLObjectType({
-      name: this.name,
-      interfaces: () => {
-        if (this.hasInterface())
-          return [Object.getPrototypeOf(this).GraphQLType()];
-        return [];
-      },
-      fields: modelInstance.getGqlFields(),
-    });
-
-    return this._gqlType;
-  }
-
-  constructor(data = {}, options) {
-    const { repository } = Object.assign({}, options);
-    const idKey = this.constructor.idKey();
-
-    // this.modelName = this.constructor.name.replace(/Repository$/, '');
-    this.modelName = this.constructor.name;
-    this.schema = this.constructor.schema();
-
-    if (repository) this.repository = repository;
+  static getSchema() {
+    const idKey = this.idKey();
     if (!this.schema)
       throw new Error(`Model '${this.modelName}' is missing a schema object`);
-    if (!this.schema.id && !this.schema[idKey])
-      Object.assign(this.schema, {
+
+    const schema = this.schema();
+    if (!schema.id && !schema[idKey])
+      Object.assign(schema, {
         [idKey]: {
           type: 'string',
           default: () => uuid.v4(),
           required: 'true',
         },
       });
-    if (typeof this.schema[idKey].default !== 'function')
+    if (typeof schema[idKey].default !== 'function')
       throw new Error(
         `Model '${this.modelName}' is missing a default function for Field 'id'`
       );
+    return schema;
+  }
 
-    Field.prototype.repository = this.repository;
-    this.fields = Object.entries(this.schema).reduce(
+  static getFields(data = {}) {
+    const idKey = this.idKey();
+    const schemaFields = Object.entries(this.getSchema());
+
+    return schemaFields.reduce(
       (result, [name, definition]) => ({
         ...result,
         [name]: new Field({
           name,
           definition,
-          value: name === idKey ? this.id(data) : data[name],
+          value:
+            name === idKey ? data.$ref || data[idKey] || data.id : data[name],
+          // value: name === idKey ? this.id(data) : data[name],
         }),
       }),
       {}
     );
+  }
+
+  static graphQLType() {
+    if (this._gqlType) return this._gqlType;
+    this._gqlType = new GraphQLObjectType({
+      name: this.name,
+      interfaces: () => {
+        if (this.hasInterface())
+          return [Object.getPrototypeOf(this).graphQLType()];
+        return [];
+      },
+      fields: () => this.graphQLFields(),
+    });
+
+    return this._gqlType;
+  }
+
+  static graphQLFields() {
+    return _.reduce(
+      this.getFields(),
+      (modelFields, modelField) => {
+        // TODO: remove this when $id idKey issue is fixed
+        const fieldName = modelField.name.replace('$', '');
+        return {
+          ...modelFields,
+          [fieldName]: {
+            type: modelField.graphQLType(),
+            resolve: async parent => {
+              if (fieldName === 'id') return parent.id();
+              const fieldModel = parent[fieldName];
+              if (fieldModel instanceof Model && !fieldModel.loaded())
+                await fieldModel.load();
+              if (modelField.type instanceof Field.List) {
+                await parent.load(`${fieldName}[*]`);
+              }
+              return fieldModel;
+            },
+          },
+        };
+      },
+      {}
+    );
+  }
+
+  constructor(data = {}, options) {
+    const { repository } = Object.assign({}, options);
+
+    // this.modelName = this.constructor.name.replace(/Repository$/, '');
+    this.modelName = this.constructor.name;
+    this.schema = this.constructor.getSchema();
+    if (!this.schema)
+      throw new Error(`Model '${this.modelName}' is missing a schema object`);
+
+    if (repository) this.repository = repository;
+    Field.prototype.repository = this.repository;
+    this.fields = this.constructor.getFields(data);
 
     const schemaKeys = Object.keys(this.schema);
     return new Proxy(this, {
@@ -174,39 +215,12 @@ class Model {
     return { $ref: this.id(), $type: this.modelName };
   }
 
-  getGqlFields() {
-    return _.reduce(
-      this.fields,
-      (modelFields, modelField) => {
-        // TODO: remove this when $id idKey issue is fixed
-        const fieldName = modelField.name.replace('$', '');
-        return {
-          ...modelFields,
-          [fieldName]: {
-            type: modelField.GraphQLType(),
-            resolve: async parent => {
-              if (fieldName === 'id') return parent.id();
-              const fieldModel = parent[fieldName];
-              if (fieldModel instanceof Model && !fieldModel.loaded())
-                await fieldModel.load();
-              if (modelField.type instanceof Field.List) {
-                await parent.load(`${fieldName}[*]`);
-              }
-              return fieldModel;
-            },
-          },
-        };
-      },
-      {}
-    );
-  }
-
   toJSON(options = {}) {
     const { shallow } = Object.assign({ shallow: false }, options);
     const model = this;
     return Object.entries(model.fields).reduce(
       (result, [name, field]) => {
-        if (name === 'meta') return result;
+        if (['$type', 'meta'].includes(name)) return result;
         const value = this[name];
         if (value) {
           if (value.constructor === Array) {
@@ -238,7 +252,10 @@ class Model {
         }
         return { ...result, [name]: value };
       },
-      { meta: { ...model.schema.meta, type: this.modelName } }
+      {
+        $type: this.modelName,
+        meta: { ...model.schema.meta, type: this.modelName },
+      }
     );
   }
 
@@ -251,12 +268,12 @@ class Model {
   }
 
   async save(options = {}) {
-    await this.preSave();
+    await this.preSave(this);
     const repo = options.repository || this.repository;
     if (!repo)
       throw new Error(`${this.modelName}::save() called without a repository`);
     repo.save(this);
-    await this.postSave();
+    await this.postSave(this);
     return this;
   }
 
@@ -273,22 +290,22 @@ class Model {
       if (optionsArg) options = optionsArg;
     }
 
-    await this.preLoad();
+    await this.preLoad(this);
     const repo = options.repository || this.repository;
     if (!repo)
       throw new Error(`${this.modelName}::load() called without a repository`);
     await repo.load(this, [].concat(paths));
-    await this.postLoad();
+    await this.postLoad(this);
     return this;
   }
 
   async remove(options = {}) {
-    await this.preRemove();
+    await this.preRemove(this);
     const repo = options.repository || this.repository;
     if (!repo)
       throw new Error(`${this.modelName}::load() called without a repository`);
     await repo.remove(this);
-    await this.postRemove();
+    await this.postRemove(this);
     return this;
   }
 }

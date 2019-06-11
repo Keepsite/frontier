@@ -176,7 +176,7 @@ class CouchbaseAdapter extends Adapter {
       } else if (value instanceof Model) {
         // const model = { $ref: value.id(), $type: value.constructor.type };
         expressions.push(
-          ...this.buildFilterExpression(value.ref(), [...nodes])
+          ...this.buildFilterExpression(value.ref(), [...nodes, key])
         );
       } else if (value instanceof Object) {
         expressions.push(...this.buildFilterExpression(value, [...nodes, key]));
@@ -194,13 +194,14 @@ class CouchbaseAdapter extends Adapter {
     if (!this.connected()) await this.connect();
     const { bucket } = this;
     const bucketName = bucket._name;
-    const typeQS = ` WHERE \`meta\`.\`type\`='${modelName}'`;
+    const typeQS = ` WHERE \`$type\`='${modelName}'`;
     const where = this.buildFilterExpression(query);
     const whereQS = where.length ? `AND ${where.join(' AND ')}` : '';
     const limitQS = options.limit ? `LIMIT ${options.limit}` : '';
+    const fullQS = `SELECT META(b).id AS id FROM \`${bucketName}\` b ${typeQS} ${whereQS} ${limitQS}`;
 
     const results = await this.executeN1qlQuery(
-      `SELECT META(b).id AS id FROM \`${bucketName}\` b ${typeQS} ${whereQS} ${limitQS}`,
+      fullQS,
       _.pick(options, ['consistency', 'profile'])
     );
     if (!results.length) return [];
@@ -222,9 +223,11 @@ class CouchbaseAdapter extends Adapter {
         if (error) return reject(error);
         return resolve(res);
       });
+    }).catch(error => {
+      if (error.code === 13)
+        throw new Error(`The key '${key}' does not exist on the server`);
+      throw error;
     });
-    // FIXME: this is never hit as couchnode throws an error without the key
-    if (!result) throw new Error(`record '${key}' missing`);
     return result;
   }
 

@@ -11,25 +11,24 @@ class Interface extends Model {
     return Object.getPrototypeOf(this).name === 'Interface';
   }
 
-  static GraphQLType() {
+  static graphQLType() {
     if (this._gqlType) return this._gqlType;
-    const modelInstance = new this();
 
     if (Object.getPrototypeOf(this).name === 'Interface') {
       this._gqlType = new GraphQLInterfaceType({
         name: this.name,
-        fields: modelInstance.getGqlFields(),
-        resolveType: obj => obj.constructor.GraphQLType(),
+        fields: this.graphQLFields(),
+        resolveType: obj => obj.constructor.graphQLType(),
       });
     } else {
-      super.GraphQLType();
+      super.graphQLType();
     }
 
     return this._gqlType;
   }
   // Auto Generate Common Schema Fields
   // typeRange.reduce((fields, Model) => {
-  //   const modelFields = Model.GraphQLType()._fields;
+  //   const modelFields = Model.graphQLType()._fields;
   //   if (!fields) return modelFields;
   //   Object.keys(fields).forEach(fieldName => {
   //     if (!_.has(modelFields, fieldName)) delete fields[fieldName];

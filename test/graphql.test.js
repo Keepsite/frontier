@@ -80,8 +80,19 @@ describe('GraphQL Types', () => {
     }
   }
 
+  class Circular extends Model {
+    static schema() {
+      return {
+        parent: { ref: Circular },
+        parentThunk: { ref: () => Circular },
+        nested: { type: Circular },
+        nestedThunk: { type: () => Circular },
+      };
+    }
+  }
+
   it('should generate graphql type from a basic Model', async () => {
-    const gqlType = Account.GraphQLType();
+    const gqlType = Account.graphQLType();
 
     assert.isOk(gqlType);
     assert.isTrue(gqlType instanceof GraphQLObjectType);
@@ -103,7 +114,7 @@ describe('GraphQL Types', () => {
         };
       }
     }
-    const gqlType = PrimitiveTypes.GraphQLType();
+    const gqlType = PrimitiveTypes.graphQLType();
 
     assert.isOk(gqlType);
     assert.isTrue(gqlType instanceof GraphQLObjectType);
@@ -123,7 +134,7 @@ describe('GraphQL Types', () => {
         };
       }
     }
-    const gqlType = MixedType.GraphQLType();
+    const gqlType = MixedType.graphQLType();
 
     assert.isOk(gqlType);
     assert.isTrue(gqlType instanceof GraphQLObjectType);
@@ -146,7 +157,7 @@ describe('GraphQL Types', () => {
         };
       }
     }
-    const gqlType = MixedType.GraphQLType();
+    const gqlType = MixedType.graphQLType();
 
     assert.isOk(gqlType);
     assert.isTrue(gqlType instanceof GraphQLObjectType);
@@ -157,7 +168,7 @@ describe('GraphQL Types', () => {
   });
 
   it('should generate graphql type with ModelRef field', async () => {
-    const gqlType = User.GraphQLType();
+    const gqlType = User.graphQLType();
 
     assert.isOk(gqlType);
     assert.isTrue(gqlType instanceof GraphQLObjectType);
@@ -165,7 +176,7 @@ describe('GraphQL Types', () => {
 
     assert.equal(id.type, GraphQLID);
     assert.equal(username.type, GraphQLString);
-    assert.equal(String(account.type), String(Account.GraphQLType()));
+    assert.equal(String(account.type), String(Account.graphQLType()));
   });
 
   it('should generate graphql type with primitive Lists', async () => {
@@ -180,7 +191,7 @@ describe('GraphQL Types', () => {
       }
     }
 
-    const gqlType = PrimitiveLists.GraphQLType();
+    const gqlType = PrimitiveLists.graphQLType();
 
     assert.isOk(gqlType);
     assert.isTrue(gqlType instanceof GraphQLObjectType);
@@ -194,7 +205,7 @@ describe('GraphQL Types', () => {
   });
 
   it('should generate graphql type with a ModelRef List', async () => {
-    const gqlType = Org.GraphQLType();
+    const gqlType = Org.graphQLType();
 
     assert.isOk(gqlType);
     assert.isTrue(gqlType instanceof GraphQLObjectType);
@@ -202,7 +213,19 @@ describe('GraphQL Types', () => {
 
     assert.equal(id.type, GraphQLID);
     assert.equal(String(name.type), GraphQLString);
-    assert.equal(String(users.type), String(GraphQLList(User.GraphQLType())));
+    assert.equal(String(users.type), String(GraphQLList(User.graphQLType())));
+  });
+
+  it('should generate graphql type with a circular ModelRefs', async () => {
+    const gqlType = Circular.graphQLType();
+
+    assert.isOk(gqlType);
+    assert.isTrue(gqlType instanceof GraphQLObjectType);
+    const { id, parent, nested } = gqlType.getFields();
+
+    assert.equal(id.type, GraphQLID);
+    assert.equal(String(parent.type), String(Circular.graphQLType()));
+    assert.equal(String(nested.type), String(Circular.graphQLType()));
   });
 
   it('should support basic types for basic graphql schema', async () => {
@@ -211,7 +234,7 @@ describe('GraphQL Types', () => {
         name: 'Query',
         fields: {
           user: {
-            type: User.GraphQLType(),
+            type: User.graphQLType(),
             args: { id: { type: GraphQLID } },
             resolve: (parent, { id }, context = {}) => {
               const {
@@ -247,7 +270,7 @@ describe('GraphQL Types', () => {
         name: 'Query',
         fields: {
           user: {
-            type: User.GraphQLType(),
+            type: User.graphQLType(),
             args: { id: { type: GraphQLID } },
             resolve: (parent, { id }, { models }) => models.User.getById(id),
           },
@@ -265,6 +288,7 @@ describe('GraphQL Types', () => {
     const query = gql`
       {
         user(id: 2) {
+          id
           username
           account {
             email
@@ -277,6 +301,7 @@ describe('GraphQL Types', () => {
     const { data, errors } = await graphql(schema, query, {}, context);
 
     assert.isUndefined(errors);
+    assert.include(data.user, { id: '2' });
     assert.include(data.user, { username: 'user1' });
     assert.include(data.user.account, { email: 'me@home.com' });
   });
@@ -287,7 +312,7 @@ describe('GraphQL Types', () => {
         name: 'Query',
         fields: {
           org: {
-            type: Org.GraphQLType(),
+            type: Org.graphQLType(),
             args: { id: { type: GraphQLID } },
             resolve: (parent, { id }, { models }) => models.Org.getById(id),
           },
@@ -328,7 +353,7 @@ describe('GraphQL Types', () => {
         name: 'Query',
         fields: {
           notification: {
-            type: Notification.GraphQLType(),
+            type: Notification.graphQLType(),
             args: { id: { type: GraphQLID } },
             resolve: (parent, { id }, { models }) =>
               models.Notification.getById(id),
@@ -389,13 +414,13 @@ describe('GraphQL Types', () => {
         name: 'Query',
         fields: {
           activity: {
-            type: Activity.GraphQLType(),
+            type: Activity.graphQLType(),
             args: { id: { type: GraphQLID } },
             resolve: (parent, { id }, { models }) =>
               models.Activity.getById(id),
           },
           user: {
-            type: User.GraphQLType(),
+            type: User.graphQLType(),
             args: { id: { type: GraphQLID } },
             resolve: (parent, { id }, { models }) => models.User.getById(id),
           },

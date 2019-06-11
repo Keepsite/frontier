@@ -1,6 +1,10 @@
 // A Repository takes a Datastore instance and optional Model Definitions
 // It is used with model instances to provide data access with a passthrough cache
 class Repository {
+  static isInterface() {
+    return false;
+  }
+
   constructor({ models, store, options = {} }) {
     Object.assign(this, { models: {}, store, options });
     // TODO: convert to allow for multiple stores per repository
@@ -28,6 +32,9 @@ class Repository {
 
   addModel(Model) {
     const repository = this;
+    // console.log('Repository::addModel()', { Model });
+    if (Object.constructor === Object)
+      throw new Error(`Invalid Model '${Model}'`);
     if (this.models[Model.name])
       throw new Error(`Duplicate Model '${Model.name}'`);
     if (Model.isInterface()) {

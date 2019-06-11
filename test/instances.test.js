@@ -63,8 +63,13 @@ describe('Model Instances', () => {
     assert.isOk(json);
     assert.equal(json.name, 'Joe Blow');
 
-    // Should have an ID and a name field only.
-    expect(Object.keys(json).length).to.equal(3);
+    // Should have an $id, $type, meta and name fields only.
+    const keys = Object.keys(json);
+    expect(keys.length).to.equal(4);
+    expect(keys.includes('$id')).to.equal(true);
+    expect(keys.includes('$type')).to.equal(true);
+    expect(keys.includes('name')).to.equal(true);
+    expect(keys.includes('meta')).to.equal(true);
   });
 
   it('should permit using ModelInstance.create', async () => {

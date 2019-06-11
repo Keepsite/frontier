@@ -1,5 +1,5 @@
 {
-  "name": "Frontier",
+  "name": "frontier",
   "version": "0.0.1",
   "description": "A Universal ODM for NodeJS",
   "main": "src/index.js",
@@ -12,10 +12,13 @@
   },
   "dependencies": {
     "couchbase": "^2.6.4",
-    "graphql": "^14.3.1",
+    "graphql-date": "^1.0.0",
     "graphql-type-json": "^0.3.0",
     "lodash": "^4.17.11",
     "uuid": "^3.3.2"
+  },
+  "peerDependencies": {
+    "graphql": "^0.11.0 || ^0.12.0 || ^0.13.0 || ^0.14.0"
   },
   "devDependencies": {
     "chai": "^4.2.0",
@@ -25,6 +28,7 @@
     "eslint-plugin-import": "^2.17.3",
     "eslint-plugin-jsx-a11y": "^6.2.1",
     "eslint-plugin-react": "^7.13.0",
+    "graphql": "^14.3.1",
     "mocha": "^6.1.4",
     "nyc": "^14.1.1",
     "prettier": "^1.17.1"
