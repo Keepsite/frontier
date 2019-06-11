@@ -130,6 +130,26 @@ describe('Model Nesting', () => {
     assert.equal(user.address.street, '4th Ave');
   });
 
+  it('should load model ref on Model.getById', async () => {
+    const org = await models.Org.getById(this.org.id(), {
+      load: 'address',
+    });
+    assert.isTrue(org.address.loaded());
+    assert.equal(org.address.number, 456);
+    assert.equal(org.address.street, '7th Ave');
+  });
+
+  it('should load model ref on Model.find', async () => {
+    const [org] = await models.Org.find(
+      { name: 'ABC' },
+      { load: ['address', 'users[*]'] }
+    );
+    assert.isTrue(org.address.loaded());
+    org.users.forEach(u => assert.isTrue(u.loaded()));
+    assert.equal(org.address.number, 456);
+    assert.equal(org.address.street, '7th Ave');
+  });
+
   it('should load multiple model refs', async () => {
     const user = await models.User.getById(this.user1.id());
     assert.isFalse(user.address.loaded());

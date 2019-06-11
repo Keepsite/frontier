@@ -29,12 +29,20 @@ class CouchbaseAdapter extends Adapter {
     super();
     this.config = Object.assign(
       {
-        cluster: null,
-        bucket: null,
-        username: null,
-        password: null,
-        consistency: Consistency.NOT_BOUNDED,
+        cluster:
+          'couchbase://localhost?http_poolsize=5&operation_timeout=60000',
+        bucketName: 'default',
+        username: 'default',
+        password: 'password1',
+        consistency: Consistency.STATEMENT_PLUS,
       },
+      // {
+      //   cluster: null,
+      //   bucket: null,
+      //   username: null,
+      //   password: null,
+      //   consistency: Consistency.NOT_BOUNDED,
+      // },
       config
     );
   }

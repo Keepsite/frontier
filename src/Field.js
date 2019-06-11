@@ -66,7 +66,7 @@ class Field {
     return false;
   }
 
-  constructor({ name, definition, value }) {
+  constructor({ name, definition, value, repository }) {
     Object.assign(this, {
       name,
       value: null,
@@ -76,6 +76,7 @@ class Field {
       default: undefined,
       validator: null,
       definition,
+      repository,
     });
     if (definition.constructor === Object && this.type !== 'object')
       Object.assign(
@@ -145,7 +146,9 @@ class Field {
   }
 
   validate() {
-    if (this.validator && this.value) this.validator(this.value);
+    if (this.validator && ![undefined, null, ''].includes(this.value)) {
+      this.validator(this.value);
+    }
     if (this.type === 'object') {
       Object.values(this.value).forEach(f => {
         if (f && f.constructor === Field) f.validate();
@@ -179,7 +182,7 @@ class Field {
   }
 
   getValue(data = this.value) {
-    if (!data && data !== false) return this.defaultValue();
+    if ([undefined, null].includes(data)) return this.defaultValue();
 
     // Get Value of Nested and Reference models
     if (Field.isModelRef(this.type)) {
@@ -200,6 +203,7 @@ class Field {
       boolean: Boolean,
     };
 
+    // TODO: remove auto casting once type validation has been implemented
     if (coreTypes[this.type]) return coreTypes[this.type](data);
 
     if (this.type instanceof List) {

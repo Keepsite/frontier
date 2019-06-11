@@ -51,7 +51,7 @@ class Model {
       throw new Error(`${this.name}::getById() called without a repository`);
 
     const model = this.ref(id, options);
-    return model.load();
+    return model.load(options.load);
   }
 
   static async find(query = {}, options = {}) {
@@ -59,7 +59,10 @@ class Model {
     if (!repository)
       throw new Error(`${this.name}::find() called without a repository`);
 
-    return repository.find(this, query, options);
+    const results = await repository.find(this, query, options);
+    if (results.length && options.load)
+      return Promise.all(results.map(r => r.load(options.load)));
+    return results;
   }
 
   static async count(query, options = {}) {
@@ -115,10 +118,9 @@ class Model {
     return schema;
   }
 
-  static getFields(data = {}) {
+  static getFields(data = {}, repository) {
     const idKey = this.idKey();
     const schemaFields = Object.entries(this.getSchema());
-
     return schemaFields.reduce(
       (result, [name, definition]) => ({
         ...result,
@@ -127,7 +129,7 @@ class Model {
           definition,
           value:
             name === idKey ? data.$ref || data[idKey] || data.id : data[name],
-          // value: name === idKey ? this.id(data) : data[name],
+          repository,
         }),
       }),
       {}
@@ -186,8 +188,7 @@ class Model {
       throw new Error(`Model '${this.modelName}' is missing a schema object`);
 
     if (repository) this.repository = repository;
-    Field.prototype.repository = this.repository;
-    this.fields = this.constructor.getFields(data);
+    this.fields = this.constructor.getFields(data, this.repository);
 
     const schemaKeys = Object.keys(this.schema);
     return new Proxy(this, {
@@ -228,7 +229,7 @@ class Model {
               ...result,
               [name]: value.map(v => {
                 if (typeof v === 'object')
-                  return v instanceof Model ? v.ref() : v.toJSON(options);
+                  return v instanceof Model ? v.ref() : v;
                 return v;
               }),
             };

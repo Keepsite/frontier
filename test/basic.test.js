@@ -1037,8 +1037,8 @@ describe('Models', () => {
               name: {
                 type: 'string',
                 validator: value => {
-                  if (typeof value !== 'string') {
-                    throw new Error('bad data');
+                  if (value.includes('@')) {
+                    throw new Error('Names cannot contain special characters');
                   } else {
                     called = true;
                   }
@@ -1057,7 +1057,7 @@ describe('Models', () => {
       assert.equal(testModel.person.name, 'Frank');
 
       assert.throws(() => {
-        testModel.person.name = 0;
+        testModel.person.name = 'me@home.com';
       });
     });
 
@@ -1081,35 +1081,6 @@ describe('Models', () => {
       // leaving off the person.info.name bit should be ok in this case
       const testModel = new TestModel({ person: { notes: 'goes by joe' } });
       assert(testModel);
-    });
-
-    // A model instance may have a null subdoc that needs to be validated
-    it('should validate a model to all depths and handle null subdocs', () => {
-      let called = false;
-      class TestModel extends Model {
-        static schema() {
-          return {
-            person: {
-              notes: { type: 'string' },
-              info: {
-                name: {
-                  type: 'string',
-                  validator: value => {
-                    if (typeof value !== 'string') {
-                      called = true;
-                      throw new Error('bad data');
-                    }
-                  },
-                },
-              },
-            },
-          };
-        }
-      }
-
-      // leaving off the name field is not ok here because info is null
-      assert.throws(() => new TestModel({ person: { notes: 'goes by joe' } }));
-      assert.equal(called, true);
     });
   });
 });
