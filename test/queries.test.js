@@ -31,10 +31,20 @@ describe('Model Queries', async () => {
       }
     }
 
+    class Board extends Model {
+      static schema() {
+        return {
+          name: 'string',
+          creator: { ref: User },
+          posts: [{ ref: Post }],
+        };
+      }
+    }
+
     const defaultStore = new Datastore({ Adapter: InMemoryAdapter });
     await defaultStore.flush();
     this.frontier = new Frontier({
-      models: [User, Post],
+      models: [User, Post, Board],
       options: { defaultStore },
     });
     await this.frontier.ensureIndices();
@@ -96,19 +106,45 @@ describe('Model Queries', async () => {
       },
       { repository }
     );
+    const post3 = new Post(
+      {
+        creator: user2,
+        message: "Joe's First Post",
+      },
+      { repository }
+    );
+    const post4 = new Post(
+      {
+        creator: user3,
+        message: "Hamish's First Post",
+      },
+      { repository }
+    );
+    const board = new Board(
+      {
+        name: 'Message Board 1',
+        creator: user1,
+        posts: [post1, post2, post4],
+      },
+      { repository }
+    );
 
-    await Promise.all([user1, user2, user3, post1, post2].map(m => m.save()));
+    await Promise.all(
+      [user1, user2, user3, post1, post2, post3, post4, board].map(m =>
+        m.save()
+      )
+    );
   });
 
   it('should perform type query with no params', async () => {
     const {
-      models: { User, Post },
+      models: { User, Board },
     } = this.frontier.defaultRepository;
-    const results = await User.find();
-    assert.equal(results.length, 3);
+    const users = await User.find();
+    assert.equal(users.length, 3);
 
-    const noResults = await Post.find();
-    assert.equal(noResults.length, 2);
+    const boards = await Board.find();
+    assert.equal(boards.length, 1);
   });
 
   it('should support basic queries', async () => {
@@ -196,6 +232,33 @@ describe('Model Queries', async () => {
       emails: { $contains: 'joe@work.com' },
     });
     assert.equal(noResults2.length, 0);
+  });
+
+  it('should support $CONTAINS queries with models', async () => {
+    const {
+      models: { User, Post, Board },
+    } = this.frontier.defaultRepository;
+
+    const hamish = await User.findOne({ name: 'Hamish' });
+    const hamishPost = await Post.findOne({ creator: hamish });
+    const results1 = await Board.find({
+      posts: { $contains: hamishPost },
+    });
+    assert.equal(results1.length, 1);
+    assert.equal(results1[0].name, 'Message Board 1');
+
+    const sarah = await User.findOne({ name: 'Sarah' });
+    const sarahPost = await Post.findOne({ creator: sarah });
+    const results2 = await Board.find({
+      posts: { $contains: sarahPost },
+    });
+    assert.equal(results2.length, 1);
+    assert.equal(results2[0].name, 'Message Board 1');
+
+    const joe = await User.findOne({ name: 'Joe' });
+    const joePost = await Post.findOne({ creator: joe });
+    const noResults = await Board.find({ posts: { $contains: joePost } });
+    assert.equal(noResults.length, 0);
   });
 
   it('should support $LIKE queries', async () => {

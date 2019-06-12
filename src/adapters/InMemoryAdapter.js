@@ -15,6 +15,9 @@ const runQueryFilter = (
 
     if (key === '$contains') {
       if (!Array.isArray(model)) return false;
+      if (value instanceof Model) {
+        return model.map(m => m.$ref).includes(value.id());
+      }
       if (value instanceof Object) {
         const r = model.map(m => runQueryFilter(m, value));
         return !r.includes(false);

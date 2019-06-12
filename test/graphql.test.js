@@ -45,6 +45,18 @@ describe('GraphQL Types', () => {
         account: { ref: Account },
       };
     }
+
+    static resolvers() {
+      return {
+        orgs: {
+          type: new GraphQLList(Org.graphQLType()),
+          resolve: (user, args, context) => {
+            const { models } = context;
+            return models.Org.find({ users: { $contains: user } });
+          },
+        },
+      };
+    }
   }
 
   class Org extends Record {
@@ -345,6 +357,48 @@ describe('GraphQL Types', () => {
     assert.include(data.org, { id: '3' });
     assert.include(data.org, { name: 'org1' });
     assert.deepInclude(data.org.users, { id: '2', username: 'user2' });
+  });
+
+  it('should support additional resolvers', async () => {
+    const schema = new GraphQLSchema({
+      query: new GraphQLObjectType({
+        name: 'Query',
+        fields: {
+          user: {
+            type: User.graphQLType(),
+            args: { id: { type: GraphQLID } },
+            resolve: (parent, { id }, { models }) => models.User.getById(id),
+          },
+        },
+      }),
+    });
+
+    const frontier = new Frontier({ models: [User, Org] });
+    const { models } = frontier.defaultRepository;
+    const user = await models.User.create({ id: 1, username: 'user1' });
+    await models.Org.create({ id: 2, name: 'org1', users: [user] });
+    await models.Org.create({ id: 3, name: 'org2', users: [user] });
+
+    const query = gql`
+      {
+        user(id: 1) {
+          id
+          username
+          orgs {
+            id
+            name
+          }
+        }
+      }
+    `;
+    const context = { models };
+    const { data, errors } = await graphql(schema, query, {}, context);
+
+    assert.isUndefined(errors);
+    assert.include(data.user, { id: '1' });
+    assert.include(data.user, { username: 'user1' });
+    assert.deepInclude(data.user.orgs, { id: '2', name: 'org1' });
+    assert.deepInclude(data.user.orgs, { id: '3', name: 'org2' });
   });
 
   it('should support Union types for graphql schema', async () => {

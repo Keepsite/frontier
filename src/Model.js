@@ -152,11 +152,13 @@ class Model {
   }
 
   static graphQLFields() {
+    const calculatedFields = this.resolvers ? this.resolvers() : {};
     return _.reduce(
       this.getFields(),
       (modelFields, modelField) => {
         // TODO: remove this when $id idKey issue is fixed
         const fieldName = modelField.name.replace('$', '');
+        if (modelFields[fieldName]) return modelFields;
         return {
           ...modelFields,
           [fieldName]: {
@@ -174,7 +176,7 @@ class Model {
           },
         };
       },
-      {}
+      calculatedFields
     );
   }
 
