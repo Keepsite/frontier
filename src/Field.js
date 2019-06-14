@@ -190,8 +190,8 @@ class Field {
         throw new Error(
           `ModelRef field '${this.name}' must not have primitive value`
         );
-      if (_.has(data, '$type')) return this.getModelInstance(data);
-      if (_.has(data, 'meta.type')) return this.getModelInstance(data);
+      if (_.has(data, 'meta.type') || _.has(data, '$type'))
+        return this.getModelInstance(data);
       return data;
     }
     if (Field.isModelType(this.type)) return data;
@@ -245,7 +245,8 @@ class Field {
       });
     }
     if (this.type === 'Mixed') {
-      if (_.has(data, 'meta.type')) return this.getModelInstance(data);
+      if (_.has(data, 'meta.type') || _.get(data, '$type'))
+        return this.getModelInstance(data);
       // TODO: this probably requires more work
       return data;
     }

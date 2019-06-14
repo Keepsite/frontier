@@ -1,3 +1,4 @@
+/* eslint-disable no-use-before-define  */
 const { assert } = require('chai');
 const { graphql } = require('graphql');
 const {
@@ -37,12 +38,25 @@ describe('GraphQL Types', () => {
     }
   }
 
+  class Address extends Model {
+    static schema() {
+      return {
+        number: 'integer',
+        street: 'string',
+        suburb: 'string',
+        city: 'string',
+        country: 'string',
+      };
+    }
+  }
+
   class User extends Record {
     static schema() {
       return {
         name: 'string',
         username: 'string',
         account: { ref: Account },
+        address: { type: Address },
       };
     }
 
@@ -191,6 +205,18 @@ describe('GraphQL Types', () => {
     assert.equal(String(account.type), String(Account.graphQLType()));
   });
 
+  it('should generate graphql type with Nested Model field', async () => {
+    const gqlType = User.graphQLType();
+
+    assert.isOk(gqlType);
+    assert.isTrue(gqlType instanceof GraphQLObjectType);
+    const { id, username, address } = gqlType.getFields();
+
+    assert.equal(id.type, GraphQLID);
+    assert.equal(username.type, GraphQLString);
+    assert.equal(String(address.type), String(Address.graphQLType()));
+  });
+
   it('should generate graphql type with primitive Lists', async () => {
     class PrimitiveLists extends Model {
       static schema() {
@@ -316,6 +342,51 @@ describe('GraphQL Types', () => {
     assert.include(data.user, { id: '2' });
     assert.include(data.user, { username: 'user1' });
     assert.include(data.user.account, { email: 'me@home.com' });
+  });
+
+  it('should support Nested Model types for graphql schema', async () => {
+    const schema = new GraphQLSchema({
+      query: new GraphQLObjectType({
+        name: 'Query',
+        fields: {
+          user: {
+            type: User.graphQLType(),
+            args: { id: { type: GraphQLID } },
+            resolve: (parent, { id }, { models }) => models.User.getById(id),
+          },
+        },
+      }),
+    });
+    const frontier = new Frontier({ models: [Address, User, Org] });
+    const { models } = frontier.defaultRepository;
+    const address = await models.Address.create({
+      number: 123,
+      street: 'Forth St',
+      city: 'New York',
+      country: 'USA',
+    });
+    await models.User.create({ id: 1, username: 'user1', address });
+    const query = gql`
+      {
+        user(id: 1) {
+          id
+          username
+          address {
+            number
+            street
+            city
+            country
+          }
+        }
+      }
+    `;
+    const context = { models };
+    const { data, errors } = await graphql(schema, query, {}, context);
+
+    assert.isUndefined(errors);
+    assert.include(data.user, { id: '1' });
+    assert.include(data.user, { username: 'user1' });
+    assert.include(data.user.address, { street: 'Forth St' });
   });
 
   it('should support Model List types for graphql schema', async () => {

@@ -164,8 +164,12 @@ class Model {
           [fieldName]: {
             type: modelField.graphQLType(),
             resolve: async parent => {
-              if (fieldName === 'id') return parent.id();
               const fieldModel = parent[fieldName];
+              if (Object.getPrototypeOf(modelField.type) === Model)
+                return fieldModel instanceof Model
+                  ? fieldModel
+                  : new modelField.type(fieldModel); // eslint-disable-line new-cap
+              if (fieldName === 'id') return parent.id();
               if (fieldModel instanceof Model && !fieldModel.loaded())
                 await fieldModel.load();
               if (modelField.type instanceof Field.List) {
