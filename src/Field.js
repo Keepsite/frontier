@@ -127,6 +127,12 @@ class Field {
               this.name
             }'. It may be missing a 'unionName' property in the model definition.`
           );
+        if (!typeRange)
+          throw new TypeError(
+            `'typeRange' definition missing from Union '${
+              unionName
+            }' on Field '${this.name}'`
+          );
         return new GraphQLUnionType({
           name: unionName,
           types: typeRange.map(model => model.graphQLType()),

@@ -12,20 +12,19 @@ class Interface extends Model {
   }
 
   static graphQLType() {
-    if (this._gqlType) return this._gqlType;
-
     if (Object.getPrototypeOf(this).name === 'Interface') {
-      this._gqlType = new GraphQLInterfaceType({
+      if (this._gqlInterfaceType) return this._gqlInterfaceType;
+      this._gqlInterfaceType = new GraphQLInterfaceType({
         name: this.name,
         fields: this.graphQLFields(),
         resolveType: obj => obj.constructor.graphQLType(),
       });
-    } else {
-      super.graphQLType();
+      return this._gqlInterfaceType;
     }
 
-    return this._gqlType;
+    return super.graphQLType();
   }
+
   // Auto Generate Common Schema Fields
   // typeRange.reduce((fields, Model) => {
   //   const modelFields = Model.graphQLType()._fields;

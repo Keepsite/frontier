@@ -152,7 +152,11 @@ class Model {
   }
 
   static graphQLFields() {
-    const calculatedFields = this.resolvers ? this.resolvers() : {};
+    const interfaceResolvers =
+      this.interfaceResolvers && this.interfaceResolvers();
+    const modelResolvers = this.resolvers && this.resolvers();
+    const calculatedFields = { ...interfaceResolvers, ...modelResolvers };
+
     return _.reduce(
       this.getFields(),
       (modelFields, modelField) => {

@@ -2,6 +2,7 @@ const _ = require('lodash');
 
 const Model = require('./Model');
 const Field = require('./Field');
+const Interface = require('./Interface');
 const Datastore = require('./Datastore');
 const Repository = require('./Repository');
 const InMemoryAdapter = require('./adapters/InMemoryAdapter');
@@ -71,6 +72,7 @@ class Frontier {
 
 Frontier.Model = Model;
 Frontier.Field = Field;
+Frontier.Interface = Interface;
 Frontier.Datastore = Datastore;
 Frontier.Repository = Repository;
 module.exports = Frontier;
