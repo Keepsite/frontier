@@ -217,4 +217,14 @@ describe('Model Nesting', () => {
     assert.equal(org.users[0].address.location.lat, '42.7836585');
     assert.equal(org.address.location.lat, '40.7515612');
   });
+
+  it('should load array refs with nested array refs', async () => {
+    const org = await models.Org.getById(this.org.id());
+    assert.isFalse(org.users[0].loaded());
+    assert.isUndefined(org.users[0].address);
+    await org.load('users[*].emails[*]');
+    assert.isTrue(org.users[0].loaded());
+    assert.equal(org.users[0].emails[0].address, 'user1@home.com');
+    assert.equal(org.users[0].emails[1].address, 'user1@work.com');
+  });
 });

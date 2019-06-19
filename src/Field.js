@@ -129,9 +129,9 @@ class Field {
           );
         if (!typeRange)
           throw new TypeError(
-            `'typeRange' definition missing from Union '${
-              unionName
-            }' on Field '${this.name}'`
+            `'typeRange' definition missing from Union '${unionName}' on Field '${
+              this.name
+            }'`
           );
         return new GraphQLUnionType({
           name: unionName,
@@ -216,10 +216,16 @@ class Field {
       if (data.constructor !== Array)
         throw new TypeError(`invalid value for array type '${data}'`);
 
-      const arrayType = this.getFieldType(this.definition[0]);
-      if (arrayType.constructor === ModelRef)
+      const ArrayType = this.getFieldType(this.definition[0]);
+      if (Field.isModelRef(ArrayType) || Field.isModelType(ArrayType))
         return data.map(value => {
           if (Field.isModelType(value.constructor)) return value;
+          if (Field.isModelType(ArrayType)) {
+            const nestedType = new ArrayType(value, {
+              repository: this.repository,
+            });
+            return Object.assign(nestedType, { $: { cas: true } });
+          }
           return this.getModelInstance(value);
         });
       return data;
