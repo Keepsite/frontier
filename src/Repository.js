@@ -104,6 +104,7 @@ class Repository {
 
   async load(modelInstance, paths) {
     if (!paths || !paths.length) {
+      if (modelInstance.loaded()) return modelInstance;
       return this.cache
         .load({ Model: modelInstance.constructor, id: modelInstance.id() })
         .then(result =>
