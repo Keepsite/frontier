@@ -1,3 +1,5 @@
+const DataLoader = require('dataloader');
+
 // A Repository takes a Datastore instance and optional Model Definitions
 // It is used with model instances to provide data access with a passthrough cache
 class Repository {
@@ -17,6 +19,21 @@ class Repository {
     }
 
     models.forEach(M => this.addModel(M));
+
+    this.cache = new DataLoader(
+      keys =>
+        Promise.all(keys.map(({ Model, id }) => this.store.getById(Model, id))),
+      { cacheKeyFn: ({ id }) => id }
+    );
+    // this.findCache = new DataLoader(keys =>
+    //   Promise.all(keys.map(({ fullQS, options }) =>
+    //     this.executeN1qlQuery(
+    //       fullQS,
+    //       _.pick(options, ['consistency', 'profile'])
+    //     )
+    //   )),
+    //   { cacheKeyFn: ({ fullQS }) => fullQS }
+    // )
   }
 
   hasInterface(model = this.constructor) {
@@ -51,9 +68,26 @@ class Repository {
     this.models[Model.name] = RepositoryModel;
   }
 
+  async getById(Model, id, options) {
+    return this.cache.load({ Model, id }).then(({ cas, value }) => {
+      const model = new Model(value, options);
+      Object.assign(model, { $: { cas } });
+      return model;
+    });
+  }
+
   async create(modelInstance, options) {
     await this.store.save(modelInstance, options);
     return modelInstance;
+  }
+
+  async findOne(Model, query, options) {
+    // TODO: inspect the cache
+    const [result] = await this.find(Model, query, {
+      ...options,
+      limit: 1,
+    });
+    return result;
   }
 
   async find(Model, query, options) {
@@ -68,35 +102,27 @@ class Repository {
     return result;
   }
 
-  // TODO: review findOne implementation
-  async findOne(Model, query, options) {
-    // TODO: inspect the cache
-    const [result] = await this.store.find(Model, query, {
-      ...options,
-      limit: 1,
-    });
-    return result;
-  }
-
   async load(modelInstance, paths) {
-    // TODO: inspect the cache
-    await this.store.load(modelInstance, paths);
-    return modelInstance;
-    // throw new Error('Repository::load() is not yet implemented');
+    if (!paths || !paths.length) {
+      return this.cache
+        .load({ Model: modelInstance.constructor, id: modelInstance.id() })
+        .then(result =>
+          Object.assign(modelInstance, result.value, { $: { cas: result.cas } })
+        );
+    }
+    return this.store.load(modelInstance, paths).then(() => modelInstance);
   }
 
   async save(modelInstance) {
-    // TODO: update the cache
+    this.cache.clear({ id: modelInstance.id() });
     await this.store.save(modelInstance);
     return modelInstance;
-    // throw new Error('Repository::save() is not yet implemented');
   }
 
   async remove(modelInstance) {
-    // TODO: update the cache
+    this.cache.clear({ id: modelInstance.id() });
     await this.store.remove(modelInstance);
     return modelInstance;
-    // throw new Error('Repository::remove() is not yet implemented');
   }
 }
 

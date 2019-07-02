@@ -8,11 +8,11 @@ class Interface extends Model {
   }
 
   static isInterface() {
-    return Object.getPrototypeOf(this).name === 'Interface';
+    return Object.getPrototypeOf(this) === Interface;
   }
 
   static graphQLType() {
-    if (Object.getPrototypeOf(this).name === 'Interface') {
+    if (this.isInterface()) {
       if (this._gqlInterfaceType) return this._gqlInterfaceType;
       this._gqlInterfaceType = new GraphQLInterfaceType({
         name: this.name,

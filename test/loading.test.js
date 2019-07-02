@@ -4,7 +4,7 @@ const Model = require('../src/Model');
 const InMemoryAdapter = require('../src/adapters/InMemoryAdapter');
 const Datastore = require('../src/Datastore');
 
-describe('Model Nesting', () => {
+describe('Model Loading', () => {
   class LatLong extends Model {
     static schema() {
       return {

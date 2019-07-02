@@ -4,8 +4,6 @@ const { Cluster, N1qlQuery } = require('couchbase');
 const Adapter = require('../Adapter');
 const Model = require('../Model');
 
-// More info on N1qlQuery class
-// http://docs.couchbase.com/sdk-api/couchbase-node-client-2.6.1/N1qlQuery.html
 const ProfileType = {
   // Disables profiling. This is the default
   PROFILE_NONE: 'off',
@@ -97,6 +95,8 @@ class CouchbaseAdapter extends Adapter {
     return `${model.modelName}${keySeperator}${model.id()}`;
   }
 
+  // More info on N1qlQuery class
+  // http://docs.couchbase.com/sdk-api/couchbase-node-client-2.6.1/N1qlQuery.html
   executeN1qlQuery(queryString, options = {}) {
     const { bucket, config } = this;
     const { consistency, profile } = Object.assign(
@@ -141,7 +141,9 @@ class CouchbaseAdapter extends Adapter {
           expressions.push(`lower(${nodePath}) LIKE lower('${value}')`);
         if (KEY === '$CONTAINS') {
           if (value instanceof Object) {
-            const subexpression = this.buildFilterExpression(value, ['x']);
+            const filter =
+              value instanceof Model ? { $ref: value.id() } : value;
+            const subexpression = this.buildFilterExpression(filter, ['x']);
             expressions.push(
               `ANY x IN ${nodePath} SATISFIES ${subexpression.join(
                 ' AND '
@@ -181,13 +183,11 @@ class CouchbaseAdapter extends Adapter {
 
           expressions.push(`NOT (${booleanExpression.join(' OR ')})`);
         }
-      } else if (value instanceof Model) {
-        // const model = { $ref: value.id(), $type: value.constructor.type };
-        expressions.push(
-          ...this.buildFilterExpression(value.ref(), [...nodes, key])
-        );
       } else if (value instanceof Object) {
-        expressions.push(...this.buildFilterExpression(value, [...nodes, key]));
+        const filter = value instanceof Model ? { $ref: value.id() } : value;
+        expressions.push(
+          ...this.buildFilterExpression(filter, [...nodes, key])
+        );
       } else if (typeof value === 'number' || typeof value === 'boolean') {
         expressions.push(`${keyPath}=${value}`);
       } else if (typeof value === 'string') {
@@ -196,6 +196,22 @@ class CouchbaseAdapter extends Adapter {
     });
 
     return expressions;
+  }
+
+  async getById(ModelDefinition, id) {
+    if (!this.connected()) await this.connect();
+    const { bucket } = this;
+    const key = `${ModelDefinition.name}|${id}`;
+    return new Promise((resolve, reject) => {
+      bucket.get(key, (error, res) => {
+        if (error) return reject(error);
+        return resolve(res);
+      });
+    }).catch(error => {
+      if (error.code === 13)
+        throw new Error(`The key '${key}' does not exist on the server`);
+      throw error;
+    });
   }
 
   async find(modelName, query, options) {

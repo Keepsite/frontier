@@ -1,5 +1,4 @@
 /* eslint-disable no-use-before-define */
-const _ = require('lodash');
 const {
   GraphQLBoolean,
   GraphQLID,
@@ -12,6 +11,40 @@ const {
 const GraphQLDate = require('graphql-date');
 const { GraphQLJSON } = require('graphql-type-json');
 
+const gqlTypeMap = {
+  string: GraphQLString,
+  number: GraphQLFloat,
+  integer: GraphQLInt,
+  boolean: GraphQLBoolean,
+  Date: GraphQLDate,
+};
+
+const coreTypes = [
+  'string',
+  'number',
+  'integer',
+  'boolean',
+  'object',
+  'Mixed',
+  'Date',
+];
+
+const corePrototypes = {
+  string: String,
+  number: Number,
+  integer: Number,
+  boolean: Boolean,
+};
+
+const defaultValues = {
+  string: '',
+  number: 0,
+  integer: 0,
+  boolean: 0,
+  array: [],
+  object: {},
+};
+
 class Field {
   static getModelType(definition) {
     if (typeof definition.type === 'function') {
@@ -21,56 +54,39 @@ class Field {
     return null;
   }
 
-  static isModelType(type) {
-    const prototype = Object.getPrototypeOf(type);
+  static isModelType(t) {
+    const prototype = Object.getPrototypeOf(t);
     if (prototype.name === 'Model') return true;
     if (typeof prototype === 'function') return Field.isModelType(prototype);
     return false;
   }
 
-  static isModelRef(type) {
-    if (type.constructor === ModelRef) {
-      if (typeof type.type === 'string') {
-        return type.type === 'Mixed';
-      }
-      return true;
-    }
-    return false;
+  static isModelRef(t) {
+    return t instanceof ModelRef;
   }
 
   static isList(type) {
-    if (type.constructor === List) {
-      return Field.isValidType(type.type);
-    }
+    if (type.constructor === List) return Field.isValidType(type.type);
     return false;
   }
 
   static isCoreType(type) {
-    const coreTypes = [
-      'string',
-      'number',
-      'integer',
-      'boolean',
-      'object',
-      'Mixed',
-      'Date',
-    ];
     return coreTypes.includes(type);
   }
 
   static isValidType(type) {
+    if (Field.isCoreType(type)) return true;
     if (Field.isModelType(type)) return true;
     if (Field.isModelRef(type)) return true;
     if (Field.isList(type)) return true;
-    if (Field.isCoreType(type)) return true;
     return false;
   }
 
-  constructor({ name, definition, value, repository }) {
+  constructor({ name, definition, type, value, repository }) {
     Object.assign(this, {
       name,
       value: null,
-      type: this.getFieldType(definition),
+      type: type || this.getFieldType(definition),
       readonly: false,
       required: false,
       default: undefined,
@@ -78,21 +94,32 @@ class Field {
       definition,
       repository,
     });
+
     if (definition.constructor === Object && this.type !== 'object')
-      Object.assign(
-        this,
-        _.pick(definition, ['readonly', 'required', 'default', 'validator'])
-      );
+      Object.assign(this, {
+        readonly: definition.readonly,
+        required: definition.required,
+        default: definition.default,
+        validator: definition.validator,
+      });
 
-    this.value = this.getValue(value);
-
-    this.validate();
+    if (![undefined, null].includes(value)) {
+      this.value = this.getValue(value);
+      this.validate();
+    }
     if (!this.type || !Field.isValidType(this.type))
       throw new TypeError(
         `invalid field type '${this.type}' for field '${name}'`
       );
 
     return new Proxy(this, {
+      get(target, key) {
+        if (key === 'value' && !target.value) {
+          target.value = target.defaultValue();
+          return target.value;
+        }
+        return Reflect.get(target, key);
+      },
       set(target, key, v) {
         if (key === 'value') {
           Reflect.set(target, key, target.getValue(v));
@@ -106,14 +133,6 @@ class Field {
   }
 
   graphQLType() {
-    const typeMap = {
-      string: GraphQLString,
-      number: GraphQLFloat,
-      integer: GraphQLInt,
-      boolean: GraphQLBoolean,
-      Date: GraphQLDate,
-    };
-
     const fieldType = this.getFieldType(this.definition);
     // TODO: replace this with a Frontier ID type
     if (this.name === '$id') return GraphQLID;
@@ -146,9 +165,9 @@ class Field {
     }
     if (fieldType instanceof List) return fieldType.graphQLType();
     if (['Mixed', 'object'].includes(fieldType)) return GraphQLJSON;
-    if (!Object.keys(typeMap).includes(fieldType))
+    if (!Object.keys(gqlTypeMap).includes(fieldType))
       throw new TypeError(`Missing GraphQL type for '${fieldType}'`);
-    return typeMap[this.type];
+    return gqlTypeMap[this.type];
   }
 
   validate() {
@@ -188,32 +207,27 @@ class Field {
   }
 
   getValue(data = this.value) {
+    const fieldType = this.type;
     if ([undefined, null].includes(data)) return this.defaultValue();
 
+    // TODO: remove auto casting once type validation has been implemented
+    if (corePrototypes[this.type]) return corePrototypes[this.type](data);
+    if (fieldType === 'Mixed') {
+      return data.$type ? this.getModelInstance(data) : data;
+    }
+    if (fieldType === 'Date') return new Date(data);
+    if (Field.isModelType(fieldType)) return data;
+
     // Get Value of Nested and Reference models
-    if (Field.isModelRef(this.type)) {
+    if (Field.isModelRef(fieldType)) {
       if (typeof data !== 'object')
         throw new Error(
           `ModelRef field '${this.name}' must not have primitive value`
         );
-      if (_.has(data, 'meta.type') || _.has(data, '$type'))
-        return this.getModelInstance(data);
-      return data;
+      return data.$type ? this.getModelInstance(data) : data;
     }
-    if (Field.isModelType(this.type)) return data;
-
-    const coreTypes = {
-      string: String,
-      number: Number,
-      integer: Number,
-      boolean: Boolean,
-    };
-
-    // TODO: remove auto casting once type validation has been implemented
-    if (coreTypes[this.type]) return coreTypes[this.type](data);
-
-    if (this.type instanceof List) {
-      if (data.constructor !== Array)
+    if (fieldType instanceof List) {
+      if (!(data instanceof Array))
         throw new TypeError(`invalid value for array type '${data}'`);
 
       const ArrayType = this.getFieldType(this.definition[0]);
@@ -231,46 +245,36 @@ class Field {
       return data;
     }
 
-    if (this.type === 'object') {
+    if (fieldType === 'object') {
       const object = Object.entries(this.definition).reduce(
-        (result, [name, definition]) => ({
-          ...result,
-          [name]: new Field({
+        (result, [name, definition]) => {
+          result[name] = new Field({
             name,
             definition,
             value: data ? data[name] : this.defaultValue(definition),
-          }),
-        }),
+          });
+          return result;
+        },
         {}
       );
       return new Proxy(object, {
         get(target, key) {
-          // TODO: check for object keys
           if (target[key]) return Reflect.get(target[key], 'value');
           return Reflect.get(target, key);
         },
         set(target, key, value) {
-          // TODO: check for object keys
           if (target[key]) Reflect.set(target[key], 'value', value);
           return Reflect.get(target, key);
         },
       });
     }
-    if (this.type === 'Mixed') {
-      if (_.has(data, 'meta.type') || _.get(data, '$type'))
-        return this.getModelInstance(data);
-      // TODO: this probably requires more work
-      return data;
-    }
-    if (this.type === 'Date') return new Date(data);
     throw new TypeError(
       `Field(${this.name})::getValue() can't handle type '${this.type}'`
     );
   }
 
   getModelInstance(data) {
-    const modelName =
-      data.modelName || _.get(data, 'meta.type') || _.get(data, '$type');
+    const modelName = data.modelName || data.$type;
 
     if (!modelName)
       throw new Error(
@@ -287,33 +291,25 @@ class Field {
 
   defaultValue(field = this) {
     // Get default value for feild
+    if (Field.isModelRef(field.type)) return undefined;
     if (field.default !== undefined)
       return typeof field.default === 'function'
         ? field.default()
         : field.default;
 
-    const defaults = {
-      string: '',
-      number: 0,
-      integer: 0,
-      boolean: 0,
-      array: [],
-      object: {},
-    };
-
-    if (field.type === 'object') return this.getValue(defaults[field.type]);
-    if (field.required) return defaults[field.type];
+    if (field.type === 'object')
+      return this.getValue(defaultValues[field.type]);
+    if (field.required) return defaultValues[field.type];
     return undefined;
   }
 }
 
 class ModelRef {
   constructor({ ref }) {
-    if (ref.prototype === undefined && typeof ref === 'function') {
-      Object.assign(this, { type: ref() });
-    } else {
-      Object.assign(this, { type: ref });
-    }
+    const type = ref.constructor === Function && !ref.getSchema ? ref() : ref;
+    if (typeof type.type === 'string' && type !== 'Mixed')
+      throw new TypeError(`Invalid ModelRef type ${type}`);
+    this.type = type;
   }
 
   toString() {

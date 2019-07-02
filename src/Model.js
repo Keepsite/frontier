@@ -50,8 +50,10 @@ class Model {
     if (!repository)
       throw new Error(`${this.name}::getById() called without a repository`);
 
-    const model = this.ref(id, options);
-    return model.load(options.load);
+    const { load, ...modelOptions } = options;
+    return repository
+      .getById(this, id, modelOptions)
+      .then(model => model.load(load));
   }
 
   static async find(query = {}, options = {}) {
@@ -98,6 +100,7 @@ class Model {
   }
 
   static getSchema() {
+    if (this._schema) return this._schema;
     const idKey = this.idKey();
     if (!this.schema)
       throw new Error(`Model '${this.modelName}' is missing a schema object`);
@@ -115,25 +118,29 @@ class Model {
       throw new Error(
         `Model '${this.modelName}' is missing a default function for Field 'id'`
       );
+    this._schema = schema;
     return schema;
   }
 
   static getFields(data = {}, repository) {
+    if (!this._fieldTypes) this._fieldTypes = {};
     const idKey = this.idKey();
     const schemaFields = Object.entries(this.getSchema());
-    return schemaFields.reduce(
-      (result, [name, definition]) => ({
-        ...result,
-        [name]: new Field({
-          name,
-          definition,
-          value:
-            name === idKey ? data.$ref || data[idKey] || data.id : data[name],
-          repository,
-        }),
-      }),
-      {}
-    );
+    return schemaFields.reduce((result, [name, definition]) => {
+      const type = this._fieldTypes[name];
+      const value =
+        name === idKey ? data.$ref || data[idKey] || data.id : data[name];
+      const field = new Field({
+        name,
+        type,
+        definition,
+        value,
+        repository,
+      });
+      if (!type) this._fieldTypes[name] = field.type;
+      result[name] = field;
+      return result;
+    }, {});
   }
 
   static graphQLType() {
@@ -147,7 +154,6 @@ class Model {
       },
       fields: () => this.graphQLFields(),
     });
-
     return this._gqlType;
   }
 
@@ -226,6 +232,10 @@ class Model {
     return { $ref: this.id(), $type: this.modelName };
   }
 
+  refKey() {
+    return `${this.modelName}|${this.id()}`;
+  }
+
   toJSON(options = {}) {
     const { shallow } = Object.assign({ shallow: false }, options);
     const model = this;
@@ -252,7 +262,7 @@ class Model {
               field.type.constructor === Field.ModelRef
             ) {
               if (
-                Field.isModelRef(field.type) &&
+                field.type instanceof Field.ModelRef &&
                 (!value.loaded() || shallow)
               ) {
                 return { ...result, [name]: value.ref() };

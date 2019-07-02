@@ -124,6 +124,13 @@ class InMemoryAdapter extends Adapter {
     );
   }
 
+  async getById(model, id) {
+    const key = `${model.name}|${id}`;
+    const value = this.db[key];
+    if (!value) throw new Error(`record '${key}' missing`);
+    return { cas: uuid.v4(), value };
+  }
+
   async count(modelName, query, options) {
     const results = this.find(modelName, query, options);
     return Object.values(results).length;

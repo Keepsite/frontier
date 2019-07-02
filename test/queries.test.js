@@ -319,7 +319,7 @@ describe('Model Queries', async () => {
     assert.equal(noResults.length, 0);
   });
 
-  it('should support $EXISTS and $missing queries', async () => {
+  it('should support $EXISTS and $MISSING queries', async () => {
     const {
       models: { User },
     } = this.frontier.defaultRepository;

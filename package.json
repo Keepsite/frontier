@@ -1,6 +1,6 @@
 {
   "name": "frontier",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "A Universal ODM for NodeJS",
   "main": "src/index.js",
   "license": "MIT",
@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "couchbase": "^2.6.4",
+    "dataloader": "^1.4.0",
     "graphql-date": "^1.0.0",
     "graphql-type-json": "^0.3.0",
     "lodash": "^4.17.11",
@@ -31,6 +32,7 @@
     "graphql": "^14.3.1",
     "mocha": "^6.1.4",
     "nyc": "^14.1.1",
+    "ottoman": "https://github.com/Keepsite/node-ottoman/tarball/55aed95c6a5b99d7e2d600da0778b195a232b750",
     "prettier": "^1.17.1"
   }
 }

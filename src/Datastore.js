@@ -10,6 +10,10 @@ class Datastore {
     this.adapter = new Adapter({ config });
   }
 
+  async getById(ModelDefinition, id) {
+    return this.adapter.getById(ModelDefinition, id);
+  }
+
   async find(ModelDefinition, query, options) {
     if (!ModelDefinition)
       throw new Error('Datastore::find() called without a Model Definition');
@@ -62,12 +66,13 @@ class Datastore {
               }`
             );
           return Promise.all(
-            arrayField.map(field =>
-              field
+            arrayField.map(field => {
+              if (!field.load) return field;
+              return field
                 .load()
                 .then(loadedField => loadedField.load(deepPath.join('.')))
-                .then(() => model)
-            )
+                .then(() => model);
+            })
           );
         }
 

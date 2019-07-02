@@ -298,7 +298,7 @@ describe('GraphQL Types', () => {
     const context = { models };
     const { data, errors } = await graphql(schema, query, {}, context);
 
-    assert.isUndefined(errors);
+    assert.isUndefined(errors, errors);
     assert.include(data.user, { username: 'user1' });
   });
 
@@ -338,7 +338,7 @@ describe('GraphQL Types', () => {
     const context = { models };
     const { data, errors } = await graphql(schema, query, {}, context);
 
-    assert.isUndefined(errors);
+    assert.isUndefined(errors, errors);
     assert.include(data.user, { id: '2' });
     assert.include(data.user, { username: 'user1' });
     assert.include(data.user.account, { email: 'me@home.com' });
@@ -383,7 +383,7 @@ describe('GraphQL Types', () => {
     const context = { models };
     const { data, errors } = await graphql(schema, query, {}, context);
 
-    assert.isUndefined(errors);
+    assert.isUndefined(errors, errors);
     assert.include(data.user, { id: '1' });
     assert.include(data.user, { username: 'user1' });
     assert.include(data.user.address, { street: 'Forth St' });
@@ -424,7 +424,7 @@ describe('GraphQL Types', () => {
     const context = { models };
     const { data, errors } = await graphql(schema, query, {}, context);
 
-    assert.isUndefined(errors);
+    assert.isUndefined(errors, errors);
     assert.include(data.org, { id: '3' });
     assert.include(data.org, { name: 'org1' });
     assert.deepInclude(data.org.users, { id: '2', username: 'user2' });
@@ -465,7 +465,7 @@ describe('GraphQL Types', () => {
     const context = { models };
     const { data, errors } = await graphql(schema, query, {}, context);
 
-    assert.isUndefined(errors);
+    assert.isUndefined(errors, errors);
     assert.include(data.user, { id: '1' });
     assert.include(data.user, { username: 'user1' });
     assert.deepInclude(data.user.orgs, { id: '2', name: 'org1' });
@@ -524,7 +524,7 @@ describe('GraphQL Types', () => {
     const context = { models };
     const { data, errors } = await graphql(schema, query, {}, context);
 
-    assert.isUndefined(errors);
+    assert.isUndefined(errors, errors);
     assert.include(data.notification, { id: '3' });
     assert.include(data.notification, { message: 'test' });
     assert.deepInclude(data.notification.recipients, {
@@ -583,7 +583,7 @@ describe('GraphQL Types', () => {
     const context = { models };
     const { data, errors } = await graphql(schema, query, {}, context);
 
-    assert.isUndefined(errors);
+    assert.isUndefined(errors, errors);
     assert.include(data.activity, { id: '2' });
     assert.include(data.activity, { message: 'test' });
     assert.include(data.activity.record, {
