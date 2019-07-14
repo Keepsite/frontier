@@ -27,20 +27,12 @@ class CouchbaseAdapter extends Adapter {
     super();
     this.config = Object.assign(
       {
-        cluster:
-          'couchbase://localhost?http_poolsize=5&operation_timeout=60000',
-        bucketName: 'default',
-        username: 'default',
-        password: 'password1',
-        consistency: Consistency.STATEMENT_PLUS,
+        cluster: null,
+        bucket: null,
+        username: null,
+        password: null,
+        consistency: Consistency.NOT_BOUNDED,
       },
-      // {
-      //   cluster: null,
-      //   bucket: null,
-      //   username: null,
-      //   password: null,
-      //   consistency: Consistency.NOT_BOUNDED,
-      // },
       config
     );
   }
@@ -236,6 +228,22 @@ class CouchbaseAdapter extends Adapter {
         return resolve(res);
       });
     });
+  }
+
+  async count(modelName, query, options) {
+    if (!this.connected()) await this.connect();
+    const { bucket } = this;
+    const bucketName = bucket._name;
+    const typeQS = ` WHERE \`$type\`='${modelName}'`;
+    const where = this.buildFilterExpression(query);
+    const whereQS = where.length ? `AND ${where.join(' AND ')}` : '';
+    const fullQS = `SELECT COUNT(b) AS count FROM \`${bucketName}\` b ${typeQS} ${whereQS}`;
+
+    const [{ count }] = await this.executeN1qlQuery(
+      fullQS,
+      _.pick(options, ['consistency', 'profile'])
+    );
+    return count;
   }
 
   async load(model) {
